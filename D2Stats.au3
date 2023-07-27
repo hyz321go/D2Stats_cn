@@ -880,11 +880,6 @@ func NotifierMain()
 						$iFlagsSound = $g_avNotifyCompile[$j][$eNotifyFlagsSound]
 						$iFlagsDisplay = $g_avNotifyCompile[$j][$eNotifyFlagsDisplay]
 
-						if ($iFlagsDisplay == NotifierFlag("name")) then
-							$sText = GetItemName($pCurrentUnit)
-						elseif ($iFlagsDisplay == NotifierFlag("stat")) then
-							$sText = $sText & " " & GetItemStat($pCurrentUnit)
-						endif
 
 						if ($iFlagsTier and not BitAND($iFlagsTier, $iTierFlag)) then continueloop
 						if ($iFlagsQuality and not BitAND($iFlagsQuality, BitRotate(1, $iQuality - 1, "D"))) then continueloop
@@ -936,6 +931,12 @@ func NotifierMain()
 
 					if ($iFlagsColour) then
 						$sText = StringRegExpReplace($sText, "ÿc.", "")
+					endif
+
+					if ($iFlagsDisplay == NotifierFlag("name")) then
+						$sText = GetItemName($pCurrentUnit)
+					elseif ($iFlagsDisplay == NotifierFlag("stat")) then
+						$sText = $sText & " " & GetItemStat($pCurrentUnit)
 					endif
 
 					PrintString("- " & $sUniqueTier & $sText, $iColor)
