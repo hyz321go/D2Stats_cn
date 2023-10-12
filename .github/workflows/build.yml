@@ -30,13 +30,16 @@ jobs:
         shell: cmd
         run: ./Compile.bat
 
+      - name: Collect Assets
+        run: bash collect-assets.sh
+
       - name: Zip file
         uses: TheDoctor0/zip-release@0.6.0
         with:
           directory: './'
-          path: './D2Stats.exe'
+          path: './dest/*'
           type: 'zip'
-          filename: 'D2Stats.zip'
+          filename: 'D2Stats_${{ steps.tagName.outputs.tag }}.zip'
 
       - name: Release Zip file
         uses: ncipollo/release-action@v1
