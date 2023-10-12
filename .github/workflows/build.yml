@@ -44,5 +44,5 @@ jobs:
       - name: Release Zip file
         uses: ncipollo/release-action@v1
         with:
-          artifacts: ./D2Stats.zip
+          artifacts: ./D2Stats_${{ steps.tagName.outputs.tag }}.zip
           generateReleaseNotes: true
