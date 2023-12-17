@@ -817,7 +817,7 @@ func NotifierMain()
 	local $pPath, $pUnit, $pUnitData, $pCurrentUnit
 	local $iUnitType, $iClass, $iUnitId, $iQuality, $iFileIndex, $iEarLevel, $iNewEarLevel, $iFlags, $iTierFlag, $iLvl
 	local $bIsNewItem, $bIsSocketed, $bIsEthereal
-	local $iFlagsTier, $iFlagsQuality, $iFlagsMisc, $iFlagsColour, $iFlagsSound, $iFlagsDisplay
+	local $iFlagsTier, $iFlagsQuality, $iFlagsMisc, $iFlagsColour, $iFlagsSound, $iFlagsDisplayName, $iFlagsDisplayStat
 	local $bNotify, $iColor
 	local $sType, $sText, $sStat, $sUniqueTier
 	
@@ -878,7 +878,8 @@ func NotifierMain()
 						$iFlagsMisc = $g_avNotifyCompile[$j][$eNotifyFlagsMisc]
 						$iFlagsColour = $g_avNotifyCompile[$j][$eNotifyFlagsColour]
 						$iFlagsSound = $g_avNotifyCompile[$j][$eNotifyFlagsSound]
-						$iFlagsDisplay = $g_avNotifyCompile[$j][$eNotifyFlagsDisplay]
+						$iFlagsDisplayName = $g_avNotifyCompile[$j][$eNotifyFlagsName]
+						$iFlagsDisplayStat = $g_avNotifyCompile[$j][$eNotifyFlagsStat]
 
 
 						if ($iFlagsTier and not BitAND($iFlagsTier, $iTierFlag)) then continueloop
@@ -919,13 +920,13 @@ func NotifierMain()
 						$iLvl = DllStructGetData($tUniqueItemsTxt, "wLvl")
 						if($iLvl == 1) Then
 						elseif ($iLvl <= 100) then
-							$sUniqueTier = " {TU} "
+							$sUniqueTier = "{TU} "
 						elseif ($iLvl <= 115) then
-							$sUniqueTier = " {SU} "
+							$sUniqueTier = "{SU} "
 						elseif ($iLvl <= 120) then
-							$sUniqueTier = " {SSU} "
+							$sUniqueTier = "{SSU} "
 						elseif ($iLvl <= 130) then
-							$sUniqueTier = " {SSSU} "
+							$sUniqueTier = "{SSSU} "
 						endif
 					endif
 
@@ -933,13 +934,22 @@ func NotifierMain()
 						$sText = StringRegExpReplace($sText, "ÿc.", "")
 					endif
 
-					if ($iFlagsDisplay == NotifierFlag("name")) then
-						$sText = GetItemName($pCurrentUnit)
-					elseif ($iFlagsDisplay == NotifierFlag("stat")) then
-						$sText = $sText & " " & GetItemStat($pCurrentUnit)
-					endif
+					local $sSeparator = "- ";
 
-					PrintString("- " & $sUniqueTier & $sText, $iColor)
+					if ($iFlagsDisplayName == NotifierFlag("name")) then
+						PrintString($sSeparator & GetItemName($pCurrentUnit)[2], $iColor)
+						$sSeparator = "  "
+	                endif
+
+			        PrintString($sSeparator & $sUniqueTier & $sText, $iColor)
+
+					if ($iFlagsDisplayStat == NotifierFlag("stat")) then
+					    local $asStats = GetItemStats($pCurrentUnit);
+
+                        for $i = $asStats[0] to 1 step -1
+                            if ($asStats[$i] <> "") then PrintString("  " & $asStats[$i], $ePrintBlue)
+                        next
+					endif
 					
 					if ($iFlagsSound <> NotifierFlag("sound_none")) then NotifierPlaySound($iFlagsSound)
 				endif
@@ -1848,7 +1858,7 @@ func PrintString($sString, $iColor = $ePrintWhite)
 	
 	RemoteThread($g_pD2InjectPrint, $iColor)
 	if (@error) then return _Log("PrintString", "Failed to create remote thread.")
-	
+
 	return True
 endfunc
 
@@ -1861,7 +1871,7 @@ func GetItemName($pUnit)
 	return GetOutputString(256)
 endfunc
 
-func GetItemStat($pUnit)
+func GetItemStats($pUnit)
 	if (not IsIngame()) then return ""
 	;~ clean before use
 	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[2048]")
@@ -1875,9 +1885,16 @@ func GetOutputString($length)
 	local $sString = _MemoryRead($g_pD2InjectString, $g_ahD2Handle, StringFormat("wchar[%s]", $length))
 	if (@error) then return _Log("GetOutputString", "Failed to create remote thread.")
 
-	$sString = StringReplace($sString, @LF, " ")
-	return $sString
+	local $asLines = StringSplit($sString, @LF)
+
+	local $sOutput = ""
+    for $i = $asLines[0] to 1 step -1
+        if ($asLines[$i] <> "") then $sOutput &= $asLines[$i] & @LF
+    next
+
+	return $asLines
 endfunc
+
 
 func WriteString($sString)
 	if (not IsIngame()) then return _Log("WriteString", "Not ingame.")
@@ -2173,7 +2190,7 @@ func DefineGlobals()
 	global $g_avGUI[256][3] = [[0]]			; Text, X, Control [0] Count
 	global $g_avGUIOption[32][3] = [[0]]	; Option, Control, Function [0] Count
 	
-	global enum $eNotifyFlagsTier, $eNotifyFlagsQuality, $eNotifyFlagsMisc, $eNotifyFlagsNoMask, $eNotifyFlagsColour, $eNotifyFlagsSound, $eNotifyFlagsDisplay, $eNotifyFlagsMatch, $eNotifyFlagsLast
+	global enum $eNotifyFlagsTier, $eNotifyFlagsQuality, $eNotifyFlagsMisc, $eNotifyFlagsNoMask, $eNotifyFlagsColour, $eNotifyFlagsSound, $eNotifyFlagsName, $eNotifyFlagsStat, $eNotifyFlagsMatch, $eNotifyFlagsLast
 	global $g_asNotifyFlags[$eNotifyFlagsLast][32] = [ _
 		[ "0", "1", "2", "3", "4", "sacred" ], _
 		[ "low", "normal", "superior", "magic", "set", "rare", "unique", "craft", "honor" ], _
@@ -2181,7 +2198,8 @@ func DefineGlobals()
 		[], _
 		[ "clr_none", "white", "red", "lime", "blue", "gold", "grey", "black", "clr_unk", "orange", "yellow", "green", "purple", "show", "hide" ], _
 		[ "sound_none" ], _
-		[ "type", "name", "stat"] _
+		[ "name" ], _
+		[ "stat"] _
 	]
 	
 	global const $g_iNumSounds = 6 ; Max 31
