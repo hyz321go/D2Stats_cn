@@ -90,10 +90,7 @@ func Main()
 
 				; Keep showing items if they don't
 				if ($g_ShowItems) then
-					if(_MemoryRead($g_hD2Client + 0xFADB4, $g_ahD2Handle) == 0) then
-						Sleep(500)
-						_MemoryWrite($g_hD2Client + 0xFADB4, $g_ahD2Handle, 1)
-					endif
+					FixShowItemsOnEsc()
 				endif
 
 				if (_GUI_Option("nopickup") and not $bIsIngame) then _MemoryWrite($g_hD2Client + 0x11C2F0, $g_ahD2Handle, 1, "byte")
@@ -319,6 +316,13 @@ func HotKey_ToggleShowItems($TEST = False)
 
 		local $sWrite = "0xC705" & SwapEndian($g_hD2Client + 0x11C2F4) & "00000000"
 		_MemoryWrite($g_hD2Client + 0x594A1, $g_ahD2Handle, $sWrite, "byte[10]")
+	endif
+endfunc
+
+func FixShowItemsOnEsc()
+	if(_MemoryRead($g_hD2Client + 0xFADB4, $g_ahD2Handle) == 0) then
+		Sleep(500)
+		_MemoryWrite($g_hD2Client + 0xFADB4, $g_ahD2Handle, 1)
 	endif
 endfunc
 
@@ -764,10 +768,24 @@ func NotifierCompile()
 	redim $g_avNotifyCompile[0][0]
 	redim $g_avNotifyCompile[$iLines][$eNotifyFlagsLast]
 
+	redim $g_avNotifyMatchStats[0]
+	redim $g_avNotifyMatchStats[$iLines]
+
 	local $avRet[0]
 	local $iCount = 0
 
+	local $sMatchStatPattern = 'match "(.*?)"'
+	local $sMatchStatRemovePattern = 'match ".*?"'
+
 	for $i = 1 to $iLines
+		local $sMatchStatResult = StringRegExp($asLines[$i], $sMatchStatPattern, 1)
+
+		if (isArray($sMatchStatResult)) then
+			$g_avNotifyMatchStats[$iCount] = $sMatchStatResult[0]
+
+			$asLines[$i] = StringRegExpReplace($asLines[$i], $sMatchStatRemovePattern, "")
+		endif
+
 		if (NotifierCompileLine($asLines[$i], $avRet)) then
 			for $j = 0 to $eNotifyFlagsLast - 1
 				$g_avNotifyCompile[$iCount][$j] = $avRet[$j]
@@ -828,8 +846,9 @@ func NotifierMain()
 	local $iUnitType, $iClass, $iUnitId, $iQuality, $iFileIndex, $iEarLevel, $iNewEarLevel, $iFlags, $iTierFlag, $iLvl
 	local $bIsNewItem, $bIsSocketed, $bIsEthereal
 	local $iFlagsTier, $iFlagsQuality, $iFlagsMisc, $iFlagsColour, $iFlagsSound, $iFlagsDisplayName, $iFlagsDisplayStat
+	local $iMatchStats
 	local $bNotify, $iColor
-	local $sType, $sText, $sStat, $sUniqueTier
+	local $sType, $sText, $sUniqueTier
 
 	local $bNotifySuperior = _GUI_Option("notify-superior")
 
@@ -881,6 +900,7 @@ func NotifierMain()
 
 				$bNotify = False
 
+				; Match with notifier rules
 				for $j = 0 to UBound($g_avNotifyCompile) - 1
 					if (StringRegExp($sType, $g_avNotifyCompile[$j][$eNotifyFlagsMatch])) then
 						$iFlagsTier = $g_avNotifyCompile[$j][$eNotifyFlagsTier]
@@ -891,6 +911,7 @@ func NotifierMain()
 						$iFlagsDisplayName = $g_avNotifyCompile[$j][$eNotifyFlagsName]
 						$iFlagsDisplayStat = $g_avNotifyCompile[$j][$eNotifyFlagsStat]
 
+						$iMatchStats = $g_avNotifyMatchStats[$j]
 
 						if ($iFlagsTier and not BitAND($iFlagsTier, $iTierFlag)) then continueloop
 						if ($iFlagsQuality and not BitAND($iFlagsQuality, BitRotate(1, $iQuality - 1, "D"))) then continueloop
@@ -902,10 +923,16 @@ func NotifierMain()
 							continueloop
 						endif
 
+						local $isMatch = ($iMatchStats And StringRegExp(GetItemStatsToMatch($pCurrentUnit), $iMatchStats))
+
 						if ($iFlagsColour == NotifierFlag("hide")) then
 							$iNewEarLevel = 2
 						elseif ($iFlagsColour <> NotifierFlag("show")) then
-							$bNotify = True
+							if ($iMatchStats) then
+                                $bNotify = $isMatch
+                            else
+                                $bNotify = True
+                            endif
 						endif
 
 						exitloop
@@ -1885,7 +1912,7 @@ func GetItemName($pUnit)
 	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[256]")
 	RemoteThread($g_pD2Client_GetItemName, $pUnit)
 	if (@error) then return _Log("GetItemName", "Failed to create remote thread.")
-	return GetOutputString(256)
+	return GetOutputStringAsArray(256)
 endfunc
 
 func GetItemStats($pUnit)
@@ -1893,11 +1920,20 @@ func GetItemStats($pUnit)
 	;~ clean before use
 	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[2048]")
 	RemoteThread($g_pD2Client_GetItemStat, $pUnit)
-	if (@error) then return _Log("GetItemStat", "Failed to create remote thread.")
+	if (@error) then return _Log("GetItemStats", "Failed to create remote thread.")
+	return GetOutputStringAsArray(2048)
+endfunc
+
+func GetItemStatsToMatch($pUnit)
+	if (not IsIngame()) then return ""
+	;~ clean before use
+	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[2048]")
+	RemoteThread($g_pD2Client_GetItemStat, $pUnit)
+	if (@error) then return _Log("GetItemStatsToMatch", "Failed to create remote thread.")
 	return GetOutputString(2048)
 endfunc
 
-func GetOutputString($length)
+func GetOutputStringAsArray($length)
 	if (not IsIngame()) then return ""
 	local $sString = _MemoryRead($g_pD2InjectString, $g_ahD2Handle, StringFormat("wchar[%s]", $length))
 	if (@error) then return _Log("GetOutputString", "Failed to create remote thread.")
@@ -1910,6 +1946,14 @@ func GetOutputString($length)
     next
 
 	return $asLines
+endfunc
+
+func GetOutputString($length)
+	if (not IsIngame()) then return ""
+	local $sString = _MemoryRead($g_pD2InjectString, $g_ahD2Handle, StringFormat("wchar[%s]", $length))
+	if (@error) then return _Log("GetOutputString", "Failed to create remote thread.")
+
+	return StringReplace($sString, @LF, " ")
 endfunc
 
 
@@ -2173,6 +2217,7 @@ func DefineGlobals()
 	global const $g_sNotifierRulesExtension = ".rules"
 	global $g_avNotifyCache[0][3]					; Name, Tier flag, Last line of name
 	global $g_avNotifyCompile[0][$eNotifyFlagsLast]	; Flags, Regex
+	global $g_avNotifyMatchStats[0] ; stats to match
 	global $g_bNotifyCache = True
 	global $g_bNotifyCompile = True
 	global $g_bNotifierChanged = False
