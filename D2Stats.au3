@@ -23,9 +23,9 @@
 #pragma compile(Icon, Assets/icon.ico)
 #pragma compile(FileDescription, Diablo II Stats reader)
 #pragma compile(ProductName, D2Stats)
-#pragma compile(ProductVersion, {{version}})
-#pragma compile(FileVersion, {{version}})
-#pragma compile(Comments, {{buildTime}})
+#pragma compile(ProductVersion, )
+#pragma compile(FileVersion, )
+#pragma compile(Comments, 2023-12-23)
 #pragma compile(UPX, True) ;compression
 #pragma compile(inputboxres, True)
 ;#pragma compile(ExecLevel, requireAdministrator)
@@ -719,7 +719,7 @@ func NotifierCompileFlag($sFlag, ByRef $avRet, $sLine)
 	return $iGroup <> $eNotifyFlagsColour
 endfunc
 
-func NotifierCompileLine($sLine, ByRef $avRet)
+func NotifierCompileLine($sLine, ByRef $avRet, $iCount)
 	$sLine = StringStripWS(StringRegExpReplace($sLine, "#.*", ""), BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING, $STR_STRIPSPACES))
 	local $iLineLength = StringLen($sLine)
 
@@ -728,6 +728,17 @@ func NotifierCompileLine($sLine, ByRef $avRet)
 
 	redim $avRet[0]
 	redim $avRet[$eNotifyFlagsLast]
+
+	local $sMatchStatPattern = 'match "(.*?)"'
+	local $sMatchStatRemovePattern = 'match ".*?"'
+
+	local $sMatchStatResult = StringRegExp($sLine, $sMatchStatPattern, 1)
+
+	if (isArray($sMatchStatResult)) then
+		$g_avNotifyMatchStats[$iCount] = $sMatchStatResult[0]
+
+		$sLine = StringRegExpReplace($sLine, $sMatchStatRemovePattern, "")
+	endif
 
 	for $i = 1 to $iLineLength
 		$sChar = StringMid($sLine, $i, 1)
@@ -740,14 +751,20 @@ func NotifierCompileLine($sLine, ByRef $avRet)
 
 			$bQuoted = not $bQuoted
 		elseif ($sChar == " " and not $bQuoted) then
-			if (NotifierCompileFlag($sArg, $avRet, $sLine)) then $bHasFlags = True
+			if (NotifierCompileFlag($sArg, $avRet, $sLine)) then
+				$bHasFlags = True
+				$g_aiFlagsCountPerLine[$iCount] += 1
+			endif
 			$sArg = ""
 		else
 			$sArg &= $sChar
 		endif
 	next
 
-	if (NotifierCompileFlag($sArg, $avRet, $sLine)) then $bHasFlags = True
+	if (NotifierCompileFlag($sArg, $avRet, $sLine)) then
+		$bHasFlags = True
+		$g_aiFlagsCountPerLine[$iCount] += 1
+	endif
 
 	if ($avRet[$eNotifyFlagsMatch] == "") then
 		if (not $bHasFlags) then return False
@@ -771,22 +788,14 @@ func NotifierCompile()
 	redim $g_avNotifyMatchStats[0]
 	redim $g_avNotifyMatchStats[$iLines]
 
+	redim $g_aiFlagsCountPerLine[0]
+	redim $g_aiFlagsCountPerLine[$iLines]
+
 	local $avRet[0]
 	local $iCount = 0
 
-	local $sMatchStatPattern = 'match "(.*?)"'
-	local $sMatchStatRemovePattern = 'match ".*?"'
-
 	for $i = 1 to $iLines
-		local $sMatchStatResult = StringRegExp($asLines[$i], $sMatchStatPattern, 1)
-
-		if (isArray($sMatchStatResult)) then
-			$g_avNotifyMatchStats[$iCount] = $sMatchStatResult[0]
-
-			$asLines[$i] = StringRegExpReplace($asLines[$i], $sMatchStatRemovePattern, "")
-		endif
-
-		if (NotifierCompileLine($asLines[$i], $avRet)) then
+		if (NotifierCompileLine($asLines[$i], $avRet, $iCount)) then
 			for $j = 0 to $eNotifyFlagsLast - 1
 				$g_avNotifyCompile[$iCount][$j] = $avRet[$j]
 			next
@@ -794,6 +803,8 @@ func NotifierCompile()
 		endif
 	next
 
+	redim $g_avNotifyMatchStats[$iLines]
+	redim $g_aiFlagsCountPerLine[$iCount]
 	redim $g_avNotifyCompile[$iCount][$eNotifyFlagsLast]
 endfunc
 
@@ -846,8 +857,8 @@ func NotifierMain()
 	local $iUnitType, $iClass, $iUnitId, $iQuality, $iFileIndex, $iEarLevel, $iNewEarLevel, $iFlags, $iTierFlag, $iLvl
 	local $bIsNewItem, $bIsSocketed, $bIsEthereal
 	local $iFlagsTier, $iFlagsQuality, $iFlagsMisc, $iFlagsColour, $iFlagsSound, $iFlagsDisplayName, $iFlagsDisplayStat
-	local $iMatchStats
-	local $bNotify, $iColor
+	local $sMatchStats
+	local $bCollectNotification, $iColor
 	local $sType, $sText, $sUniqueTier
 
 	local $bNotifySuperior = _GUI_Option("notify-superior")
@@ -856,6 +867,9 @@ func NotifierMain()
 	local $tItemData = DllStructCreate("dword iQuality;dword pad1[5];dword iFlags;dword pad2[3];dword dwFileIndex; dword pad2[7];byte iEarLevel;")
 	local $tUniqueItemsTxt = DllStructCreate("dword pad1[13];word wLvl;")
 	local $pUniqueItemsTxt = _MemoryRead($g_pD2sgpt + 0xC24, $g_ahD2Handle)
+	local $sMatchingLine
+
+	local $asNotificationsPool[0][4]
 
 	for $i = 0 to $iPaths - 1
 		$pPath = _MemoryRead($pPaths + 4*$i, $g_ahD2Handle)
@@ -869,7 +883,6 @@ func NotifierMain()
 			$iClass = DllStructGetData($tUnitAny, "iClass")
 			$pCurrentUnit = $pUnit
 			$pUnit = DllStructGetData($tUnitAny, "pUnit")
-
 			; iUnitType 1 = monster
 			if(_GUI_Option("goblin-alert")) Then
 				if ($iUnitType == 1 and _ArraySearch($g_goblinIds, $iClass) > -1) then
@@ -898,11 +911,13 @@ func NotifierMain()
 				$iTierFlag = $g_avNotifyCache[$iClass][1]
 				$sText = $g_avNotifyCache[$iClass][2]
 
-				$bNotify = False
+				$bCollectNotification = False
 
 				; Match with notifier rules
 				for $j = 0 to UBound($g_avNotifyCompile) - 1
 					if (StringRegExp($sType, $g_avNotifyCompile[$j][$eNotifyFlagsMatch])) then
+						$sMatchingLine = $g_avNotifyCompile[$j][$eNotifyFlagsMatch]
+
 						$iFlagsTier = $g_avNotifyCompile[$j][$eNotifyFlagsTier]
 						$iFlagsQuality = $g_avNotifyCompile[$j][$eNotifyFlagsQuality]
 						$iFlagsMisc = $g_avNotifyCompile[$j][$eNotifyFlagsMisc]
@@ -911,97 +926,247 @@ func NotifierMain()
 						$iFlagsDisplayName = $g_avNotifyCompile[$j][$eNotifyFlagsName]
 						$iFlagsDisplayStat = $g_avNotifyCompile[$j][$eNotifyFlagsStat]
 
-						$iMatchStats = $g_avNotifyMatchStats[$j]
+						local $sItemStats = GetItemStats($pCurrentUnit)
+						local $sStatsToMatch = $g_avNotifyMatchStats[$j]
+						local $iFlagsCount = $g_aiFlagsCountPerLine[$j]
+
+						local $bHideItem = $iFlagsColour == NotifierFlag("hide")
+						local $bShowItem = $iFlagsColour == NotifierFlag("show")
+						local $bShouldNotify = $iFlagsColour <> NotifierFlag("show")
+						local $bShouldMatchByStats = $sMatchStats and $iFlagsColour == NotifierFlag("show")
+						local $bIsMatchByStats = ($sStatsToMatch And StringRegExp(StringReplace($sItemStats, @LF, " "), $sStatsToMatch))
+						local $bNotEquipment = $iQuality == $eQualityNormal and $iTierFlag == NotifierFlag("0")
+
 
 						if ($iFlagsTier and not BitAND($iFlagsTier, $iTierFlag)) then continueloop
 						if ($iFlagsQuality and not BitAND($iFlagsQuality, BitRotate(1, $iQuality - 1, "D"))) then continueloop
 						if (not $bIsSocketed and BitAND($iFlagsMisc, NotifierFlag("socket"))) then continueloop
 
-						if ($bIsEthereal) then
-							$sText = "(Eth) " & $sText
-						elseif (BitAND($iFlagsMisc, NotifierFlag("eth"))) then
-							continueloop
-						endif
-
-						local $isMatch = ($iMatchStats And StringRegExp(GetItemStatsToMatch($pCurrentUnit), $iMatchStats))
-
-						if ($iFlagsColour == NotifierFlag("hide")) then
+						; Hide items on ground with "hide" flag
+						if ($bHideItem) then
 							$iNewEarLevel = 2
-						elseif ($iFlagsColour <> NotifierFlag("show")) then
-							if ($iMatchStats) then
-                                $bNotify = $isMatch
+							exitloop;
+						; Show items on ground with "show" flag
+                        elseif ($bShowItem) then
+                            $iNewEarLevel = 1
+                        ; Show items on ground with "show" flag and run notification for specific items that match by stats
+                        elseif ($bShouldMatchByStats) then
+                            $bCollectNotification = $bIsMatchByStats
+						elseif ($bShouldNotify) then
+							if ($sStatsToMatch) then
+                                $bCollectNotification = $bIsMatchByStats
                             else
-                                $bNotify = True
+                                $bCollectNotification = True
                             endif
 						endif
 
-						exitloop
+						; Collect notifications to pool ($asNotificationsPool)
+						if ($bCollectNotification) then
+							if ($bIsEthereal) then
+								$sText = "(Eth) " & $sText
+							elseif (BitAND($iFlagsMisc, NotifierFlag("eth"))) then
+								continueloop
+							endif
+
+                            if ($iFlagsColour) then
+                                $iColor = $iFlagsColour - 1
+                            elseif ($bNotEquipment) then
+                                $iColor = $ePrintOrange
+                            else
+                                $iColor = $g_iQualityColor[$iQuality]
+                            endif
+
+                            if ($bNotifySuperior and $iQuality == $eQualitySuperior) then $sText = "Superior " & $sText
+
+                            if(_GUI_Option("unique-tier") and $iQuality == 7) Then
+                                _WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUniqueItemsTxt + ($iFileIndex * 0x14c), DllStructGetPtr($tUniqueItemsTxt), DllStructGetSize($tUniqueItemsTxt), 0)
+                                $iLvl = DllStructGetData($tUniqueItemsTxt, "wLvl")
+                                if($iLvl == 1) Then
+                                elseif ($iLvl <= 100) then
+                                    $sUniqueTier = "{TU} "
+                                elseif ($iLvl <= 115) then
+                                    $sUniqueTier = "{SU} "
+                                elseif ($iLvl <= 120) then
+                                    $sUniqueTier = "{SSU} "
+                                elseif ($iLvl <= 130) then
+                                    $sUniqueTier = "{SSSU} "
+                                endif
+                            endif
+
+                            if ($iFlagsColour) then
+                                $sText = StringRegExpReplace($sText, "ÿc.", "")
+                            endif
+
+							; compile text for item notifications
+							; $asNotificationsPool represents an array of notifications and params to display
+
+							local $asName = ""
+							local $asType = ""
+							local $asStats = ""
+
+                            if ($iFlagsDisplayName == NotifierFlag("name")) then
+                                local $asNewName = ["- " & $sUniqueTier & GetItemName($pCurrentUnit)[2], $iColor]
+                                local $asNewType = ["  " & $sText, $ePrintGrey]
+
+                                $asName = $asNewName
+                                $asType = $asNewType
+
+                                if(_GUI_Option("oneline-name")) then
+                                    local $asNewName = ["- " & $sUniqueTier & GetItemName($pCurrentUnit)[2] & "  " & $sText, $iColor]
+
+                                    $asName = $asNewName
+                                    $asType = ""
+                                endif
+                            else
+                                local $asNewType = ["- " & $sUniqueTier & $sText, $iColor]
+                                $asName = ""
+                                $asType = $asNewType
+                            endif
+
+
+                            if ($bIsMatchByStats or $iFlagsDisplayStat == NotifierFlag("stat")) then
+                                ; a reversed 2d array of stats and color
+                                ; to display as notifications per line
+                                local $asStats = StringSplit($sItemStats, @LF)
+                                local $a2DStats[$asStats[0]][2]
+
+                                for $i = 1 to $asStats[0]
+                                    $a2DStats[$asStats[0] - $i][0] = $asStats[$i]
+                                    ; default stat color
+                                    $a2DStats[$asStats[0] - $i][1] = $ePrintBlue
+                                next
+
+                                $asStats = $a2DStats
+                            endif
+
+							local $aFlags[8] = [$bIsMatchByStats, $iFlagsColour, $iQuality, $iFlagsSound, $iFlagsCount, $sStatsToMatch, $sMatchingLine, $bHideItem]
+							local $aNotification[1][4] = [[$asName, $asType, $asStats, $aFlags]]
+
+							_ArrayAdd($asNotificationsPool, $aNotification)
+                        endif
 					endif
 				next
 
 				_MemoryWrite($pUnitData + 0x48, $g_ahD2Handle, $iNewEarLevel, "byte")
 
-				if ($bNotify) then
-					if ($iFlagsColour) then
-						$iColor = $iFlagsColour - 1
-					elseif ($iQuality == $eQualityNormal and $iTierFlag == NotifierFlag("0")) then
-						$iColor = $ePrintOrange
-					else
-						$iColor = $g_iQualityColor[$iQuality]
-					endif
-
-					if ($bNotifySuperior and $iQuality == $eQualitySuperior) then $sText = "Superior " & $sText
-
-					if(_GUI_Option("unique-tier") and $iQuality == 7) Then
-						_WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUniqueItemsTxt + ($iFileIndex * 0x14c), DllStructGetPtr($tUniqueItemsTxt), DllStructGetSize($tUniqueItemsTxt), 0)
-						$iLvl = DllStructGetData($tUniqueItemsTxt, "wLvl")
-						if($iLvl == 1) Then
-						elseif ($iLvl <= 100) then
-							$sUniqueTier = "{TU} "
-						elseif ($iLvl <= 115) then
-							$sUniqueTier = "{SU} "
-						elseif ($iLvl <= 120) then
-							$sUniqueTier = "{SSU} "
-						elseif ($iLvl <= 130) then
-							$sUniqueTier = "{SSSU} "
-						endif
-					endif
-
-					if ($iFlagsColour) then
-						$sText = StringRegExpReplace($sText, "ÿc.", "")
-					endif
-
-					local $combinedText = $sText
-					local $sSeparator = "- ";
-
-					if ($iFlagsDisplayName == NotifierFlag("name")) then
-						if(_GUI_Option("oneline-name")) then
-							$combinedText = GetItemName($pCurrentUnit)[2] & "  " & $sText
-	                    else
-							PrintString($sSeparator & GetItemName($pCurrentUnit)[2], $iColor)
-	                        $sSeparator = "  "
-                        endif
-	                endif
-
-					local $coloredBaseName = $iFlagsDisplayName == NotifierFlag("name") and _GUI_Option("oneline-name") == 0
-
-			        PrintString($sSeparator & $sUniqueTier & $combinedText, $coloredBaseName ? $ePrintGrey : $iColor)
-
-					if ($iFlagsDisplayStat == NotifierFlag("stat")) then
-					    local $asStats = GetItemStats($pCurrentUnit);
-
-                        for $i = $asStats[0] to 1 step -1
-                            if ($asStats[$i] <> "") then PrintString("  " & $asStats[$i], $ePrintBlue)
-                        next
-					endif
-
-					if ($iFlagsSound <> NotifierFlag("sound_none")) then NotifierPlaySound($iFlagsSound)
-				endif
+				; Display notifications from pool
+				DisplayNotification($asNotificationsPool)
+				$bCollectNotification = False
 			endif
 		wend
 	next
 
 	$g_bNotifierChanged = False
+endfunc
+
+func DisplayNotification($asNotificationsPool)
+	local $aNotifications = NarrowNotificationsPool($asNotificationsPool)
+
+	if (not UBound($aNotifications)) then return
+
+	local $asName = $aNotifications[0]
+	local $asType = $aNotifications[1]
+	local $asStats = $aNotifications[2]
+	local $aFlags = $aNotifications[3]
+	local $sMatchingLine = $aFlags[6]
+
+	local $iFlagsSound = $aFlags[3]
+
+	; Display item name
+	if (UBound($asName)) then
+		PrintString($asName[0], $asName[1])
+    endif
+
+	; Display item type
+	if (UBound($asType)) then
+		PrintString($asType[0], $asType[1])
+	endif
+
+	; Display item stats
+	if (UBound($asStats)) then
+		for $n = 0 to UBound($asStats) - 1
+            if ($asStats[$n][0] <> "") then
+                PrintString("  " & $asStats[$n][0], $asStats[$n][1])
+            endif
+        next
+	endif
+
+	if(_GUI_Option("debug-notifier")) then
+		PrintString('rule - ' & $sMatchingLine, $ePrintRed)
+	endif
+
+    if ($iFlagsSound <> NotifierFlag("sound_none")) then NotifierPlaySound($iFlagsSound)
+endfunc
+
+func HighlightStats($asStats, $sStatsToMatch)
+	local $aColoredStats[0][2]
+
+	for $n = 1 to UBound($asStats) - 1
+        local $sStat = $asStats[$n][0]
+        local $iColor = $asStats[$n][1]
+
+		if (StringRegExp($sStat, $sStatsToMatch)) then
+            local $aColored = [[$sStat, $ePrintRed]]
+            _ArrayAdd($aColoredStats, $aColored)
+        else
+            local $aNotColored = [[$sStat, $iColor]]
+            _ArrayAdd($aColoredStats, $aNotColored)
+        endif
+    next
+
+    return $aColoredStats
+endfunc
+
+func NarrowNotificationsPool($asNotificationsPool)
+	local $aNotifications[0]
+	local $asColoredStats
+	local $iLastFlagsCount
+
+	for $i = 0 to UBound($asNotificationsPool) - 1
+		local $asName = $asNotificationsPool[$i][0]
+		local $asType = $asNotificationsPool[$i][1]
+		local $asStats = $asNotificationsPool[$i][2]
+		local $aFlags = $asNotificationsPool[$i][3]
+		;local $bHideItem = $aFlags[7]
+
+		local $aPool[4] = [$asName, $asType, $asStats, $aFlags]
+
+
+		local $isMatchByStats = $aFlags[0]
+		local $isColored = $aFlags[1]
+		local $iFlagsCount = $aFlags[4]
+		local $sStatsToMatch = $aFlags[5]
+
+		if ($isMatchByStats) then
+			local $asNewStats = UBound($asColoredStats) ? $asColoredStats : $asStats
+			$asColoredStats = HighlightStats($asNewStats, $sStatsToMatch)
+			$aNotifications = $aPool
+			if(_GUI_Option("debug-notifier")) then
+				PrintString('match by stats', $ePrintRed)
+			endif
+			continueloop;
+		elseif ($isColored) then
+			$aNotifications = $aPool
+			if(_GUI_Option("debug-notifier")) then
+				PrintString('match by color', $ePrintRed)
+			endif
+			continueloop;
+		elseif ($iFlagsCount > $iLastFlagsCount) then
+			$aNotifications = $aPool
+			$iLastFlagsCount = $iFlagsCount
+			if(_GUI_Option("debug-notifier")) then
+				PrintString($iFlagsCount & ' match by flags count', $ePrintRed)
+			endif
+			continueloop;
+		endif
+
+		$aNotifications = $aPool
+    next
+
+	; swap plain stats to colored
+	if (UBound($asColoredStats)) then $aNotifications[2] = $asColoredStats
+
+	return $aNotifications
 endfunc
 
 func NotifierPlaySound($iSound)
@@ -1483,11 +1648,11 @@ func OnClick_Forum()
 endfunc
 
 func CreateGUI()
-	global $g_iGroupLines = 15
+	global $g_iGroupLines = 16
 	global $g_iGroupWidth = 110
 	global $g_iGroupXStart = 8 + $g_iGroupWidth/2
 	global $g_iGUIWidth = 16 + 4*$g_iGroupWidth
-	global $g_iGUIHeight = 34 + 16*$g_iGroupLines
+	global $g_iGUIHeight = 34 + 17*$g_iGroupLines
 
 	local $sTitle = not @Compiled ? "Test" : StringFormat("D2Stats %s - [%s]", FileGetVersion(@AutoItExe, "FileVersion"), FileGetVersion(@AutoItExe, "Comments"))
 
@@ -1912,7 +2077,7 @@ func GetItemName($pUnit)
 	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[256]")
 	RemoteThread($g_pD2Client_GetItemName, $pUnit)
 	if (@error) then return _Log("GetItemName", "Failed to create remote thread.")
-	return GetOutputStringAsArray(256)
+	return StringSplit(GetOutputString(256), @LF)
 endfunc
 
 func GetItemStats($pUnit)
@@ -1921,39 +2086,14 @@ func GetItemStats($pUnit)
 	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[2048]")
 	RemoteThread($g_pD2Client_GetItemStat, $pUnit)
 	if (@error) then return _Log("GetItemStats", "Failed to create remote thread.")
-	return GetOutputStringAsArray(2048)
-endfunc
-
-func GetItemStatsToMatch($pUnit)
-	if (not IsIngame()) then return ""
-	;~ clean before use
-	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[2048]")
-	RemoteThread($g_pD2Client_GetItemStat, $pUnit)
-	if (@error) then return _Log("GetItemStatsToMatch", "Failed to create remote thread.")
 	return GetOutputString(2048)
-endfunc
-
-func GetOutputStringAsArray($length)
-	if (not IsIngame()) then return ""
-	local $sString = _MemoryRead($g_pD2InjectString, $g_ahD2Handle, StringFormat("wchar[%s]", $length))
-	if (@error) then return _Log("GetOutputString", "Failed to create remote thread.")
-
-	local $asLines = StringSplit($sString, @LF)
-
-	local $sOutput = ""
-    for $i = $asLines[0] to 1 step -1
-        if ($asLines[$i] <> "") then $sOutput &= $asLines[$i] & @LF
-    next
-
-	return $asLines
 endfunc
 
 func GetOutputString($length)
 	if (not IsIngame()) then return ""
 	local $sString = _MemoryRead($g_pD2InjectString, $g_ahD2Handle, StringFormat("wchar[%s]", $length))
 	if (@error) then return _Log("GetOutputString", "Failed to create remote thread.")
-
-	return StringReplace($sString, @LF, " ")
+	return $sString
 endfunc
 
 
@@ -2205,6 +2345,7 @@ func DefineGlobals()
 		[ "name" ], _
 		[ "stat"] _
 	]
+	global $g_aiFlagsCountPerLine[0]
 
 	global const $g_iNumSounds = 6 ; Max 31
 	global $g_idVolumeSlider
@@ -2238,7 +2379,7 @@ func DefineGlobals()
 	global $g_hTimerCopyName = 0
 	global $g_sCopyName = ""
 
-	global const $g_iGUIOptionsGeneral = 8
+	global const $g_iGUIOptionsGeneral = 9
 	global const $g_iGUIOptionsHotkey = 5
 
 	global const $g_sNotifyTextDefault = BinaryToString("0x3120322033203420756E69717565202020202020202020202020202020232054696572656420756E69717565730D0A73616372656420756E6971756520202020202020202020202020202020232053616372656420756E69717565730D0A2252696E67247C416D756C6574247C4A6577656C2220756E69717565202320556E69717565206A6577656C72790D0A225175697665722220756E697175650D0A7365740D0A2242656C6C61646F6E6E61220D0A22536872696E65205C28313022202020202020202020202020202020202320536872696E65730D0A23225175697665722220726172650D0A232252696E67247C416D756C6574222072617265202020202020202020202320526172652072696E677320616E6420616D756C6574730D0A2373616372656420657468207375706572696F7220726172650D0A0D0A225369676E6574206F66204C6561726E696E67220D0A2247726561746572205369676E6574220D0A22456D626C656D220D0A2254726F706879220D0A224379636C65220D0A22456E6368616E74696E67220D0A2257696E6773220D0A2252756E6573746F6E657C457373656E63652422202320546567616E7A652072756E65730D0A2247726561742052756E6522202020202020202020232047726561742072756E65730D0A224F72625C7C2220202020202020202020202020202320554D4F730D0A224F696C206F6620436F6E6A75726174696F6E220D0A2244696D656E73696F6E616C204B6579220D0A224F6363756C7420456666696779220D0A224D797374696320447965220D0A2252656C6963220D0A225175657374204974656D220D0A232252696E67206F66207468652046697665220D0A0D0A232048696465206974656D730D0A686964652031203220332034206C6F77206E6F726D616C207375706572696F72206D6167696320726172650D0A6869646520225E2852696E677C416D756C6574292422206D616769630D0A68696465202251756976657222206E6F726D616C206D616769630D0A6869646520225E28416D6574687973747C546F70617A7C53617070686972657C456D6572616C647C527562797C4469616D6F6E647C536B756C6C7C4F6E79787C426C6F6F6473746F6E657C54757271756F6973657C416D6265727C5261696E626F772053746F6E652924220D0A6869646520225E466C61776C657373220D0A73686F77202228477265617465727C537570657229204865616C696E6720506F74696F6E220D0A686964652022284865616C696E677C4D616E612920506F74696F6E220D0A6869646520225E4B657924220D0A6869646520225E28456C7C456C647C5469727C4E65667C4574687C4974687C54616C7C52616C7C4F72747C5468756C7C416D6E7C536F6C7C536861656C7C446F6C7C48656C7C496F7C4C756D7C4B6F7C46616C7C4C656D7C50756C7C556D7C4D616C7C4973747C47756C7C5665787C4F686D7C4C6F7C5375727C4265727C4A61687C4368616D7C5A6F64292052756E652422")
@@ -2249,7 +2390,8 @@ func DefineGlobals()
 		["notify-superior", 0, "cb", "Notifier prefixes superior items with 'Superior'"], _
 		["goblin-alert", 1, "cb", "Play sound (sound 6) when goblins are nearby."], _
 		["unique-tier", 1, "cb", "Show sacred tier of unique (SU/SSU/SSSU)"], _
-		["oneline-name", 0, "cb", "One line item type + name notification"], _
+		["oneline-name", 0, "cb", "One line item name and stats notification style"], _
+		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule"], _
 		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)"], _
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem"], _
 		["copy-name", 0, "cb", "Only copy item name"], _
