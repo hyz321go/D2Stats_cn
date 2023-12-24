@@ -647,25 +647,6 @@ func NotifierFlag($sFlag)
 	return SetError(1, 0, 0)
 endfunc
 
-func NotifierFlagRef($sFlag, ByRef $iFlag, ByRef $iGroup)
-	$iFlag = 0
-	$iGroup = 0
-
-	for $i = 0 to $eNotifyFlagsLast - 1
-		for $j = 0 to UBound($g_asNotifyFlags, $UBOUND_COLUMNS) - 1
-			if ($g_asNotifyFlags[$i][$j] == "") then
-				exitloop
-			elseif ($g_asNotifyFlags[$i][$j] == $sFlag) then
-				$iGroup = $i
-				$iFlag = $j
-				return 1
-			endif
-		next
-	next
-
-	return SetError(1, 0, 0)
-endfunc
-
 func NotifierCache()
 	if (not $g_bNotifyCache) then return
 	$g_bNotifyCache = False
@@ -704,6 +685,25 @@ func NotifierCache()
 	next
 endfunc
 
+func NotifierFlagRef($sFlag, ByRef $iFlag, ByRef $iGroup)
+	$iFlag = 0
+	$iGroup = 0
+
+	for $i = 0 to $eNotifyFlagsLast - 1
+		for $j = 0 to UBound($g_asNotifyFlags, $UBOUND_COLUMNS) - 1
+			if ($g_asNotifyFlags[$i][$j] == "") then
+				exitloop
+			elseif ($g_asNotifyFlags[$i][$j] == $sFlag) then
+				$iGroup = $i
+				$iFlag = $j
+				return 1
+			endif
+		next
+	next
+
+	return SetError(1, 0, 0)
+endfunc
+
 func NotifierCompileFlag($sFlag, ByRef $avRet, $sLine)
 	if ($sFlag == "") then return False
 
@@ -724,33 +724,30 @@ func NotifierCompileLine($sLine, ByRef $avRet, $iCount)
 	local $iLineLength = StringLen($sLine)
 
 	local $sArg = "", $sChar
-	local $bQuoted = False, $bHasFlags = False
+	local $bItemPattern = False, $bHasFlags = False
+	local $bStatsPattern = False
 
 	redim $avRet[0]
 	redim $avRet[$eNotifyFlagsLast]
-
-	local $sMatchStatPattern = 'match "(.*?)"'
-	local $sMatchStatRemovePattern = 'match ".*?"'
-
-	local $sMatchStatResult = StringRegExp($sLine, $sMatchStatPattern, 1)
-
-	if (isArray($sMatchStatResult)) then
-		$g_avNotifyMatchStats[$iCount] = $sMatchStatResult[0]
-
-		$sLine = StringRegExpReplace($sLine, $sMatchStatRemovePattern, "")
-	endif
 
 	for $i = 1 to $iLineLength
 		$sChar = StringMid($sLine, $i, 1)
 
 		if ($sChar == '"') then
-			if ($bQuoted) then
+			if ($bItemPattern) then
 				$avRet[$eNotifyFlagsMatch] = $sArg
 				$sArg = ""
 			endif
 
-			$bQuoted = not $bQuoted
-		elseif ($sChar == " " and not $bQuoted) then
+			$bItemPattern = not $bItemPattern
+		elseif ($sChar == "{" or $sChar == "}") then
+			if ($bStatsPattern) then
+				$avRet[$eNotifyFlagsMatchStats] = $sArg
+				$sArg = ""
+			endif
+
+			$bStatsPattern = not $bStatsPattern
+		elseif ($sChar == " " and not $bItemPattern and not $bStatsPattern) then
 			if (NotifierCompileFlag($sArg, $avRet, $sLine)) then
 				$bHasFlags = True
 				$g_aiFlagsCountPerLine[$iCount] += 1
@@ -785,9 +782,6 @@ func NotifierCompile()
 	redim $g_avNotifyCompile[0][0]
 	redim $g_avNotifyCompile[$iLines][$eNotifyFlagsLast]
 
-	redim $g_avNotifyMatchStats[0]
-	redim $g_avNotifyMatchStats[$iLines]
-
 	redim $g_aiFlagsCountPerLine[0]
 	redim $g_aiFlagsCountPerLine[$iLines]
 
@@ -803,7 +797,6 @@ func NotifierCompile()
 		endif
 	next
 
-	redim $g_avNotifyMatchStats[$iLines]
 	redim $g_aiFlagsCountPerLine[$iCount]
 	redim $g_avNotifyCompile[$iCount][$eNotifyFlagsLast]
 endfunc
@@ -817,7 +810,7 @@ func NotifierHelp($sInput)
 
 	local $avRet[0]
 
-	if (NotifierCompileLine($sInput, $avRet)) then
+	if (NotifierCompileLine($sInput, $avRet, $iCount)) then
 		local $sMatch = $avRet[$eNotifyFlagsMatch]
 		local $iFlagsTier = $avRet[$eNotifyFlagsTier]
 
@@ -883,6 +876,7 @@ func NotifierMain()
 			$iClass = DllStructGetData($tUnitAny, "iClass")
 			$pCurrentUnit = $pUnit
 			$pUnit = DllStructGetData($tUnitAny, "pUnit")
+
 			; iUnitType 1 = monster
 			if(_GUI_Option("goblin-alert")) Then
 				if ($iUnitType == 1 and _ArraySearch($g_goblinIds, $iClass) > -1) then
@@ -926,15 +920,18 @@ func NotifierMain()
 						$iFlagsDisplayName = $g_avNotifyCompile[$j][$eNotifyFlagsName]
 						$iFlagsDisplayStat = $g_avNotifyCompile[$j][$eNotifyFlagsStat]
 
-						local $sItemStats = GetItemStats($pCurrentUnit)
-						local $sStatsToMatch = $g_avNotifyMatchStats[$j]
+						;
+						local $sGetItemStats = GetItemStats($pCurrentUnit)
+						local $sStatsPattern = $g_avNotifyCompile[$j][$eNotifyFlagsMatchStats]
+						local $sStatsGroup = $g_avNotifyCompile[$j][$eNotifyFlagsStatsGroup]
+
 						local $iFlagsCount = $g_aiFlagsCountPerLine[$j]
 
 						local $bHideItem = $iFlagsColour == NotifierFlag("hide")
 						local $bShowItem = $iFlagsColour == NotifierFlag("show")
 						local $bShouldNotify = $iFlagsColour <> NotifierFlag("show")
 						local $bShouldMatchByStats = $sMatchStats and $iFlagsColour == NotifierFlag("show")
-						local $bIsMatchByStats = ($sStatsToMatch And StringRegExp(StringReplace($sItemStats, @LF, " "), $sStatsToMatch))
+						local $bIsMatchByStats = ($sStatsPattern And StringRegExp(StringReplace($sGetItemStats, @LF, " "), $sStatsPattern))
 						local $bNotEquipment = $iQuality == $eQualityNormal and $iTierFlag == NotifierFlag("0")
 
 
@@ -953,7 +950,7 @@ func NotifierMain()
                         elseif ($bShouldMatchByStats) then
                             $bCollectNotification = $bIsMatchByStats
 						elseif ($bShouldNotify) then
-							if ($sStatsToMatch) then
+							if ($sStatsPattern) then
                                 $bCollectNotification = $bIsMatchByStats
                             else
                                 $bCollectNotification = True
@@ -1027,7 +1024,7 @@ func NotifierMain()
                             if ($bIsMatchByStats or $iFlagsDisplayStat == NotifierFlag("stat")) then
                                 ; a reversed 2d array of stats and color
                                 ; to display as notifications per line
-                                local $asStats = StringSplit($sItemStats, @LF)
+                                local $asStats = StringSplit($sGetItemStats, @LF)
                                 local $a2DStats[$asStats[0]][2]
 
                                 for $i = 1 to $asStats[0]
@@ -1039,7 +1036,7 @@ func NotifierMain()
                                 $asStats = $a2DStats
                             endif
 
-							local $aFlags[8] = [$bIsMatchByStats, $iFlagsColour, $iQuality, $iFlagsSound, $iFlagsCount, $sStatsToMatch, $sMatchingLine, $bHideItem]
+							local $aFlags[8] = [$bIsMatchByStats, $iFlagsColour, $iQuality, $iFlagsSound, $iFlagsCount, $sStatsPattern, $sMatchingLine, $bHideItem]
 							local $aNotification[1][4] = [[$asName, $asType, $asStats, $aFlags]]
 
 							_ArrayAdd($asNotificationsPool, $aNotification)
@@ -1051,6 +1048,7 @@ func NotifierMain()
 
 				; Display notifications from pool
 				DisplayNotification($asNotificationsPool)
+				redim $asNotificationsPool[0][4]
 				$bCollectNotification = False
 			endif
 		wend
@@ -1091,21 +1089,19 @@ func DisplayNotification($asNotificationsPool)
         next
 	endif
 
-	if(_GUI_Option("debug-notifier")) then
-		PrintString('rule - ' & $sMatchingLine, $ePrintRed)
-	endif
+	if(_GUI_Option("debug-notifier")) then PrintString('rule - ' & $sMatchingLine, $ePrintRed)
 
     if ($iFlagsSound <> NotifierFlag("sound_none")) then NotifierPlaySound($iFlagsSound)
 endfunc
 
-func HighlightStats($asStats, $sStatsToMatch)
+func HighlightStats($asStats, $sStatsPattern)
 	local $aColoredStats[0][2]
 
 	for $n = 1 to UBound($asStats) - 1
         local $sStat = $asStats[$n][0]
         local $iColor = $asStats[$n][1]
 
-		if (StringRegExp($sStat, $sStatsToMatch)) then
+		if (StringRegExp($sStat, $sStatsPattern)) then
             local $aColored = [[$sStat, $ePrintRed]]
             _ArrayAdd($aColoredStats, $aColored)
         else
@@ -1135,28 +1131,22 @@ func NarrowNotificationsPool($asNotificationsPool)
 		local $isMatchByStats = $aFlags[0]
 		local $isColored = $aFlags[1]
 		local $iFlagsCount = $aFlags[4]
-		local $sStatsToMatch = $aFlags[5]
+		local $sStatsPattern = $aFlags[5]
 
 		if ($isMatchByStats) then
 			local $asNewStats = UBound($asColoredStats) ? $asColoredStats : $asStats
-			$asColoredStats = HighlightStats($asNewStats, $sStatsToMatch)
+			$asColoredStats = HighlightStats($asNewStats, $sStatsPattern)
 			$aNotifications = $aPool
-			if(_GUI_Option("debug-notifier")) then
-				PrintString('match by stats', $ePrintRed)
-			endif
+			if(_GUI_Option("debug-notifier")) then PrintString('match by stats', $ePrintRed)
 			continueloop;
 		elseif ($isColored) then
 			$aNotifications = $aPool
-			if(_GUI_Option("debug-notifier")) then
-				PrintString('match by color', $ePrintRed)
-			endif
+			if(_GUI_Option("debug-notifier")) then PrintString('match by color', $ePrintRed)
 			continueloop;
 		elseif ($iFlagsCount > $iLastFlagsCount) then
 			$aNotifications = $aPool
 			$iLastFlagsCount = $iFlagsCount
-			if(_GUI_Option("debug-notifier")) then
-				PrintString($iFlagsCount & ' match by flags count', $ePrintRed)
-			endif
+			if(_GUI_Option("debug-notifier")) then PrintString($iFlagsCount & ' match by flags count', $ePrintRed)
 			continueloop;
 		endif
 
@@ -2334,8 +2324,8 @@ func DefineGlobals()
 	global $g_avGUI[256][3] = [[0]]			; Text, X, Control [0] Count
 	global $g_avGUIOption[32][3] = [[0]]	; Option, Control, Function [0] Count
 
-	global enum $eNotifyFlagsTier, $eNotifyFlagsQuality, $eNotifyFlagsMisc, $eNotifyFlagsNoMask, $eNotifyFlagsColour, $eNotifyFlagsSound, $eNotifyFlagsName, $eNotifyFlagsStat, $eNotifyFlagsMatch, $eNotifyFlagsLast
-	global $g_asNotifyFlags[$eNotifyFlagsLast][32] = [ _
+	global enum $eNotifyFlagsTier, $eNotifyFlagsQuality, $eNotifyFlagsMisc, $eNotifyFlagsNoMask, $eNotifyFlagsColour, $eNotifyFlagsSound, $eNotifyFlagsName, $eNotifyFlagsStat, $eNotifyFlagsStatsGroup, $eNotifyFlagsMatchStats, $eNotifyFlagsMatch, $eNotifyFlagsLast
+		global $g_asNotifyFlags[$eNotifyFlagsLast][32] = [ _
 		[ "0", "1", "2", "3", "4", "sacred" ], _
 		[ "low", "normal", "superior", "magic", "set", "rare", "unique", "craft", "honor" ], _
 		[ "eth", "socket" ], _
@@ -2343,7 +2333,8 @@ func DefineGlobals()
 		[ "clr_none", "white", "red", "lime", "blue", "gold", "grey", "black", "clr_unk", "orange", "yellow", "green", "purple", "show", "hide" ], _
 		[ "sound_none" ], _
 		[ "name" ], _
-		[ "stat"] _
+		[ "stat" ], _
+		[ "group", "group_i" ] _
 	]
 	global $g_aiFlagsCountPerLine[0]
 
@@ -2358,7 +2349,6 @@ func DefineGlobals()
 	global const $g_sNotifierRulesExtension = ".rules"
 	global $g_avNotifyCache[0][3]					; Name, Tier flag, Last line of name
 	global $g_avNotifyCompile[0][$eNotifyFlagsLast]	; Flags, Regex
-	global $g_avNotifyMatchStats[0] ; stats to match
 	global $g_bNotifyCache = True
 	global $g_bNotifyCompile = True
 	global $g_bNotifierChanged = False
