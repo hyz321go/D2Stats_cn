@@ -839,7 +839,7 @@ func NotifierHelp($sInput)
 	redim $asMatches[$iCount][2]
 	_ArrayDisplay($asMatches, "Notifier Help", default, 32, @LF, "Item|Text")
 endfunc
-
+MsgBox(0, '1', 'hsdf')
 func NotifierMain()
 	NotifierCache()
 	NotifierCompile()
@@ -1017,7 +1017,7 @@ func NotifierMain()
                             $asType = $asNewType
                         endif
 
-                        if ($bShowItemStats) then
+                        if (UBound($asStatGroups) or $bShowItemStats) then
 	                        ; a reversed 2d array of stats and color
 	                        ; to display as notifications per line
 	                        local $asStats = StringSplit($sGetItemStats, @LF)
@@ -1065,6 +1065,7 @@ func NotifierMain()
 				_MemoryWrite($pUnitData + 0x48, $g_ahD2Handle, $iNewEarLevel, "byte")
 
 				; Display notifications from pool
+				if (not UBound($asNotificationsPool)) then return
 				DisplayNotification($asNotificationsPool)
 
 				redim $asNotificationsPool[0][4]
@@ -1116,19 +1117,23 @@ endfunc
 func HighlightStats($asStats, $asStatGroups)
 	local $aColoredStats[0][2]
 
-	for $n = 1 to UBound($asStats) - 1
-        local $sStat = $asStats[$n][0]
-        local $iColor = $asStats[$n][1]
+    for $k = 1 to UBound($asStats) - 1
+        local $sStat = $asStats[$k][0]
+        local $iColor = $asStats[$k][1]
+        local $aWithDefaultColor = [[$sStat, $iColor]]
 
-		if (StringRegExp($sStat, $asStatGroups)) then
-            local $aColored = [[$sStat, $ePrintRed]]
-            _ArrayAdd($aColoredStats, $aColored)
-        else
-            local $aNotColored = [[$sStat, $iColor]]
-            _ArrayAdd($aColoredStats, $aNotColored)
-        endif
+        _ArrayAdd($aColoredStats, $aWithDefaultColor)
+
+        for $i = 0 to UBound($asStatGroups) - 1
+            if ($asStatGroups[$i] == "" or $aColoredStats[$k - 1][1] == $ePrintRed) then continueLoop
+
+
+            if (StringRegExp($sStat, $asStatGroups[$i])) then
+                $aColoredStats[$k - 1][0] = $sStat
+                $aColoredStats[$k - 1][1] = $ePrintRed
+            endif
+        next
     next
-
     return $aColoredStats
 endfunc
 
@@ -1153,6 +1158,7 @@ func NarrowNotificationsPool($asNotificationsPool)
 		local $asStatGroups = $oFlags.item('$asStatGroups')
 
 		if (UBound($asStatGroups)) then
+
 			local $asNewStats = UBound($asColoredStats) ? $asColoredStats : $asStats
 			$asColoredStats = HighlightStats($asNewStats, $asStatGroups)
 			$aNotifications = $aPool
