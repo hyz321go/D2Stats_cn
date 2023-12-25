@@ -866,8 +866,8 @@ func NotifierMain()
 	local $tItemData = DllStructCreate("dword iQuality;dword pad1[5];dword iFlags;dword pad2[3];dword dwFileIndex; dword pad2[7];byte iEarLevel;")
 	local $tUniqueItemsTxt = DllStructCreate("dword pad1[13];word wLvl;")
 	local $pUniqueItemsTxt = _MemoryRead($g_pD2sgpt + 0xC24, $g_ahD2Handle)
-	local $sMatchingLine
 
+	local $sMatchingLine
 	local $asNotificationsPool[0][4]
 
 	for $i = 0 to $iPaths - 1
@@ -912,10 +912,7 @@ func NotifierMain()
 				$iTierFlag = $g_avNotifyCache[$iClass][1]
 				$sText = $g_avNotifyCache[$iClass][2]
 
-				MsgBox(0, '$sText', $sText)
-
 				local $bShowNotification = False
-
 				; Match with notifier rules
 				for $j = 0 to UBound($g_avNotifyCompile) - 1
 					if (StringRegExp($sType, $g_avNotifyCompile[$j][$eNotifyFlagsMatch])) then
@@ -942,7 +939,6 @@ func NotifierMain()
 						local $bShowItemName = $iFlagsDisplayName == NotifierFlag("name")
 						local $bShowItemStats = $iFlagsDisplayStat == NotifierFlag("stat")
 
-						local $bIsMatchByStats = False
 						local $bNotEquipment = $iQuality == $eQualityNormal and $iTierFlag == NotifierFlag("0")
 
 						if ($iFlagsTier and not BitAND($iFlagsTier, $iTierFlag)) then continueloop
@@ -958,7 +954,6 @@ func NotifierMain()
 						; Show items on ground with "show" flag
                         if ($bShowItem) then
                             $iNewEarLevel = 1
-                            exitloop;
                         endif
 
 						; Assemble notifications text
@@ -1049,7 +1044,7 @@ func NotifierMain()
 						; Flags are added to the object because I don't know a more
 						; convenient way to pass them to the function :)
 						local $oFlags = ObjCreate("Scripting.Dictionary")
-						$oFlags.add('$bIsMatchByStats', $bIsMatchByStats)
+
 						$oFlags.add('$iFlagsColour', $iFlagsColour)
 						$oFlags.add('$iFlagsSound', $iFlagsSound)
 						$oFlags.add('$asStatGroups', $asStatGroups)
@@ -1076,9 +1071,9 @@ func NotifierMain()
 				$bShowNotification = False
 			endif
 		wend
-	next
 
-	$g_bNotifierChanged = False
+		$g_bNotifierChanged = False
+	next
 endfunc
 
 func DisplayNotification($asNotificationsPool)
@@ -1120,7 +1115,6 @@ endfunc
 
 func HighlightStats($asStats, $asStatGroups)
 	local $aColoredStats[0][2]
-	_ArrayDisplay($asStatGroups[0], '$asStatGroups[0]')
 
 	for $n = 1 to UBound($asStats) - 1
         local $sStat = $asStats[$n][0]
@@ -1150,17 +1144,15 @@ func NarrowNotificationsPool($asNotificationsPool)
 		local $asType = $asNotificationsPool[$i][1]
 		local $asStats = $asNotificationsPool[$i][2]
 		local $oFlags = $asNotificationsPool[$i][3]
-		;local $bHideItem = $oFlags.item('$bHideItem')
 
 		local $aPool[4] = [$asName, $asType, $asStats, $oFlags]
 
 
-		local $bIsMatchByStats = $oFlags.item('$bIsMatchByStats')
 		local $isColored = $oFlags.item('$isColored')
 		local $iFlagsCount = $oFlags.item('$iFlagsCount')
 		local $asStatGroups = $oFlags.item('$asStatGroups')
 
-		if ($bIsMatchByStats) then
+		if (UBound($asStatGroups)) then
 			local $asNewStats = UBound($asColoredStats) ? $asColoredStats : $asStats
 			$asColoredStats = HighlightStats($asNewStats, $asStatGroups)
 			$aNotifications = $aPool
