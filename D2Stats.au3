@@ -935,11 +935,21 @@ func NotifierMain()
 						local $bHideItem = $iFlagsColour == NotifierFlag("hide")
 						local $bShowItem = $iFlagsColour == NotifierFlag("show")
 
-						; Notification display flags
-						local $bShowItemName = $iFlagsDisplayName == NotifierFlag("name")
-						local $bShowItemStats = $iFlagsDisplayStat == NotifierFlag("stat")
-
+						; For notification display flags
 						local $bNotEquipment = $iQuality == $eQualityNormal and $iTierFlag == NotifierFlag("0")
+						local $bShowItemName = $iFlagsDisplayName == NotifierFlag("name")
+						local $bDisplayItemStats = $iFlagsDisplayStat == NotifierFlag("stat")
+						local $bIsMatchByStats = False
+
+						local $asItemName = ""
+						local $asItemType = ""
+						local $asItemStats = ""
+
+                        ; collect a reversed 2d array of stats and color
+                        ; to display as notifications per line
+                        if (UBound($asStatGroups) or $bDisplayItemStats) then
+	                        $asItemStats = HighlightStats($sGetItemStats, $asStatGroups, $bIsMatchByStats)
+                        endif
 
 						if ($iFlagsTier and not BitAND($iFlagsTier, $iTierFlag)) then continueloop
 						if ($iFlagsQuality and not BitAND($iFlagsQuality, BitRotate(1, $iQuality - 1, "D"))) then continueloop
@@ -956,7 +966,12 @@ func NotifierMain()
                             $iNewEarLevel = 1
                         endif
 
-						; Assemble notifications text
+                        ; Don't display notification if no match by stats from rule
+                        if (not $bShowItem and UBound($asStatGroups) and not $bIsMatchByStats) then
+							continueloop
+                        endif
+
+						; Notifications section. Assembling text, collecting in pool
 						if ($bIsEthereal) then
 							$sText = "(Eth) " & $sText
 						elseif (BitAND($iFlagsMisc, NotifierFlag("eth"))) then
@@ -994,50 +1009,24 @@ func NotifierMain()
 
 						; compiling texts for item notifications
 
-						local $asName = ""
-						local $asType = ""
-						local $asStats = ""
-
                         if ($bShowItemName) then
                             local $asNewName = ["- " & $sUniqueTier & GetItemName($pCurrentUnit)[2], $iColor]
                             local $asNewType = ["  " & $sText, $ePrintGrey]
 
-                            $asName = $asNewName
-                            $asType = $asNewType
+                            $asItemName = $asNewName
+                            $asItemType = $asNewType
 
                             if(_GUI_Option("oneline-name")) then
                                 local $asNewName = ["- " & $sUniqueTier & GetItemName($pCurrentUnit)[2] & "  " & $sText, $iColor]
 
-                                $asName = $asNewName
-                                $asType = ""
+                                $asItemName = $asNewName
+                                $asItemType = ""
                             endif
                         else
                             local $asNewType = ["- " & $sUniqueTier & $sText, $iColor]
-                            $asName = ""
-                            $asType = $asNewType
+                            $asItemName = ""
+                            $asItemType = $asNewType
                         endif
-
-                        if (UBound($asStatGroups) or $bShowItemStats) then
-	                        ; a reversed 2d array of stats and color
-	                        ; to display as notifications per line
-	                        local $asStats = StringSplit($sGetItemStats, @LF)
-	                        local $a2DStats[$asStats[0]][2]
-
-	                        for $i = 1 to $asStats[0]
-	                            $a2DStats[$asStats[0] - $i][0] = $asStats[$i]
-	                            ; default stat color
-	                            $a2DStats[$asStats[0] - $i][1] = $ePrintBlue
-	                        next
-
-	                        $asStats = $a2DStats
-                        endif
-
-						if (UBound($asStatGroups)) then
-							for $i = 0 to UBound($asStatGroups) - 1
-								StringRegExp(StringReplace($sGetItemStats, @LF, " "), $asStatGroups)
-							next
-						endif
-
 
 						; Forming a array of notifications to add to the pool
 
@@ -1053,7 +1042,7 @@ func NotifierMain()
 						$oFlags.add('$bHideItem', $bHideItem)
 
 
-						local $aNotification[1][4] = [[$asName, $asType, $asStats, $oFlags]]
+						local $aNotification[1][4] = [[$asItemName, $asItemType, $asItemStats, $oFlags]]
 
 						; $asNotificationsPool represents an array of notifications per item base
 						_ArrayAdd($asNotificationsPool, $aNotification)
@@ -1114,29 +1103,6 @@ func DisplayNotification($asNotificationsPool)
     if ($iFlagsSound <> NotifierFlag("sound_none")) then NotifierPlaySound($iFlagsSound)
 endfunc
 
-func HighlightStats($asStats, $asStatGroups)
-	local $aColoredStats[0][2]
-
-    for $k = 1 to UBound($asStats) - 1
-        local $sStat = $asStats[$k][0]
-        local $iColor = $asStats[$k][1]
-        local $aWithDefaultColor = [[$sStat, $iColor]]
-
-        _ArrayAdd($aColoredStats, $aWithDefaultColor)
-
-        for $i = 0 to UBound($asStatGroups) - 1
-            if ($asStatGroups[$i] == "" or $aColoredStats[$k - 1][1] == $ePrintRed) then continueLoop
-
-
-            if (StringRegExp($sStat, $asStatGroups[$i])) then
-                $aColoredStats[$k - 1][0] = $sStat
-                $aColoredStats[$k - 1][1] = $ePrintRed
-            endif
-        next
-    next
-    return $aColoredStats
-endfunc
-
 ; To display only one notification we need to narrow notifications
 ; pool by filtering and prioritising
 func NarrowNotificationsPool($asNotificationsPool)
@@ -1157,14 +1123,7 @@ func NarrowNotificationsPool($asNotificationsPool)
 		local $iFlagsCount = $oFlags.item('$iFlagsCount')
 		local $asStatGroups = $oFlags.item('$asStatGroups')
 
-		if (UBound($asStatGroups)) then
-
-			local $asNewStats = UBound($asColoredStats) ? $asColoredStats : $asStats
-			$asColoredStats = HighlightStats($asNewStats, $asStatGroups)
-			$aNotifications = $aPool
-			if(_GUI_Option("debug-notifier")) then PrintString('match by stats', $ePrintRed)
-			continueloop;
-		elseif ($isColored) then
+		if ($isColored) then
 			$aNotifications = $aPool
 			if(_GUI_Option("debug-notifier")) then PrintString('match by color', $ePrintRed)
 			continueloop;
@@ -1182,6 +1141,31 @@ func NarrowNotificationsPool($asNotificationsPool)
 	if (UBound($asColoredStats)) then $aNotifications[2] = $asColoredStats
 
 	return $aNotifications
+endfunc
+
+func HighlightStats($sGetItemStats, $asStatGroups, byref $bIsMatchByStats)
+	local $asStats = StringSplit($sGetItemStats, @LF)
+	local $aColoredStats[$asStats[0]][2]
+
+    for $k = 1 to $asStats[0]
+        local $sStat = $asStats[$k]
+
+		$aColoredStats[$asStats[0] - $k][0] = $sStat
+        $aColoredStats[$asStats[0] - $k][1] = $ePrintBlue
+
+        for $i = 0 to UBound($asStatGroups) - 1
+            if ($asStatGroups[$i] == "" or $aColoredStats[$k - 1][1] == $ePrintRed) then
+                continueloop
+            endif
+
+            if (StringRegExp($sStat, $asStatGroups[$i])) then
+                $aColoredStats[$asStats[0] - $k][1] = $ePrintRed
+                $bIsMatchByStats = True
+            endif
+        next
+    next
+
+    return $aColoredStats
 endfunc
 
 func NotifierPlaySound($iSound)
