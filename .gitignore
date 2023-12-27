@@ -5,4 +5,6 @@ mxl-txts/*
 NotifierRules/*
 *.rar
 dist/
+dest/
 .idea/
+kek*.txt

@@ -912,8 +912,10 @@ func NotifierMain()
 				; Match with notifier rules
 				for $j = 0 to UBound($g_avNotifyCompile) - 1
 					if (StringRegExp($sType, $g_avNotifyCompile[$j][$eNotifyFlagsMatch])) then
-						$sMatchingLine = $g_avNotifyCompile[$j][$eNotifyFlagsMatch]
+		                _WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUniqueItemsTxt + ($iFileIndex * 0x14c), DllStructGetPtr($tUniqueItemsTxt), DllStructGetSize($tUniqueItemsTxt), 0)
+		                local $iLvl = DllStructGetData($tUniqueItemsTxt, "wLvl")
 
+						$sMatchingLine = $g_avNotifyCompile[$j][$eNotifyFlagsMatch]
 						$iFlagsTier = $g_avNotifyCompile[$j][$eNotifyFlagsTier]
 						$iFlagsQuality = $g_avNotifyCompile[$j][$eNotifyFlagsQuality]
 						$iFlagsMisc = $g_avNotifyCompile[$j][$eNotifyFlagsMisc]
@@ -961,6 +963,7 @@ func NotifierMain()
 						$oItemFlags.add('$pUnitData', $pUnitData)
 						$oItemFlags.add('$bDisplayItemStats', $bDisplayItemStats)
 						$oItemFlags.add('$bShowItemName', $bShowItemName)
+						$oItemFlags.add('$iLvl', $iLvl)
 
 						; Forming an array of notifications to add to the pool
                         local $aOnGroundItem[1][4] = [[$sType, $oItemFlags]]
@@ -976,11 +979,6 @@ func NotifierMain()
 
 				; Display notifications from pool
 				DisplayNotification($asNotificationsPool)
-
-				; Clean pools after we done with processing item dropped
-				if (UBound($aOnGroundDisplayPool)) then redim $aOnGroundDisplayPool[0][0]
-				if (UBound($asPreNotificationsPool)) then redim $asPreNotificationsPool[0][0]
-				if (UBound($asNotificationsPool)) then redim $asNotificationsPool[0][0]
 			endif
 		wend
 
@@ -1052,6 +1050,7 @@ func FormatNotifications($asPreNotificationsPool)
 		local $bShowItem = $oFlags.item('$bShowItem')
 		local $bShowItemName = $oFlags.item('$bShowItemName')
 		local $pUnitData = $oFlags.item('$pUnitData')
+		local $iLvl = $oFlags.item('$iLvl')
 
 		local $bIsMatchByStats = False
 
@@ -1059,7 +1058,7 @@ func FormatNotifications($asPreNotificationsPool)
 		local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
         local $asItemType = $asItem[1]
         local $asItemStats = ""
-        local $iItemColor = $iFlagsColour - 1
+        local $iItemColor = $bNotEquipment ? $ePrintOrange : $g_iQualityColor[$iQuality]
         local $sPreName = ""
 
         ; collect a reversed 2d array of stats and color
@@ -1080,17 +1079,11 @@ func FormatNotifications($asPreNotificationsPool)
 			$sPreName = "(Eth) " & $sPreName
 		endif
 
-	    if ($bNotEquipment) then
-	        $iItemColor = $ePrintOrange
-	    else
-	        $iItemColor = $g_iQualityColor[$iQuality]
-	    endif
+	    if ($iFlagsColour) then $iItemColor = $iFlagsColour - 1
 
 	    if (_GUI_Option("notify-superior") and $iQuality == $eQualitySuperior) then $sPreName = "Superior " & $sPreName
 
         if(_GUI_Option("unique-tier") and $iQuality == 7) Then
-            _WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUniqueItemsTxt + ($iFileIndex * 0x14c), DllStructGetPtr($tUniqueItemsTxt), DllStructGetSize($tUniqueItemsTxt), 0)
-            local $iLvl = DllStructGetData($tUniqueItemsTxt, "wLvl")
             if($iLvl == 1) Then
             elseif ($iLvl <= 100) then
                 $sPreName = "{TU} " & $sPreName
@@ -1103,33 +1096,33 @@ func FormatNotifications($asPreNotificationsPool)
             endif
         endif
 
+        if ($iFlagsColour) then
+            if($asItemName and $bShowItemName) then
+                $asItemName = StringRegExpReplace($asItemName, "ÿc.", "")
+            else
+                $asItemType = StringRegExpReplace($asItemType, "ÿc.", "")
+            endif
+        endif
+
 		; compiling texts for item notifications
 
-        if ($bShowItemName or $bIsMatchByStats) then
-            local $asNewName = ["- " & $asItemName, $iItemColor]
-            local $asNewType = ["  " & $asItemType, $ePrintGrey]
-
-            $asItemName = $asNewName
-            $asItemType = $asNewType
-
+        if ($asItemName and ($bShowItemName or $bIsMatchByStats)) then
             if(_GUI_Option("oneline-name")) then
                 local $asNewName = ["- " & $sPreName & $asItemName & "  " & $asItemType, $iItemColor]
 
                 $asItemName = $asNewName
                 $asItemType = ""
+            else
+	            local $asNewName = ["- " & $asItemName, $iItemColor]
+	            local $asNewType = ["  " & $asItemType, $ePrintGrey]
+
+	            $asItemName = $asNewName
+	            $asItemType = $asNewType
             endif
         else
             local $asNewType = ["- " & $sPreName & $asItemType, $iItemColor]
             $asItemName = ""
             $asItemType = $asNewType
-        endif
-
-        if ($iFlagsColour) then
-            if($bShowItemName) then
-                $asItemName = StringRegExpReplace($asItemName, "ÿc.", "")
-            else
-                $asItemType = StringRegExpReplace($asItemType, "ÿc.", "")
-            endif
         endif
 
         local $aNotification[1][4] = [[$asItemName, $asItemType, $asItemStats, $oFlags]]
@@ -1201,7 +1194,8 @@ func NarrowNotificationsPool($asNotificationsPool)
 			$aNotifications = $aPool
 			if(_GUI_Option("debug-notifier")) then PrintString('match by color', $ePrintRed)
 			continueloop;
-		elseif ($iFlagsCount > $iLastFlagsCount) then
+
+		elseif ($iFlagsCount > $iLastFlagsCount or $iFlagsCount == 0) then
 			$aNotifications = $aPool
 			$iLastFlagsCount = $iFlagsCount
 			if(_GUI_Option("debug-notifier")) then PrintString($iFlagsCount & ' match by flags count', $ePrintRed)
