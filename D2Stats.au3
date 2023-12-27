@@ -839,7 +839,7 @@ func NotifierHelp($sInput)
 	redim $asMatches[$iCount][2]
 	_ArrayDisplay($asMatches, "Notifier Help", default, 32, @LF, "Item|Text")
 endfunc
-MsgBox(0, '1', 'hsdf')
+
 func NotifierMain()
 	NotifierCache()
 	NotifierCompile()
@@ -853,14 +853,10 @@ func NotifierMain()
 	if (not $pPaths or not $iPaths) then return
 
 	local $pPath, $pUnit, $pUnitData, $pCurrentUnit
-	local $iUnitType, $iClass, $iUnitId, $iQuality, $iFileIndex, $iEarLevel, $iNewEarLevel, $iFlags, $iTierFlag, $iLvl
+	local $iUnitType, $iClass, $iUnitId, $iQuality, $iFileIndex, $iEarLevel, $iFlags, $iTierFlag
 	local $bIsNewItem, $bIsSocketed, $bIsEthereal
 	local $iFlagsTier, $iFlagsQuality, $iFlagsMisc, $iFlagsColour, $iFlagsSound, $iFlagsDisplayName, $iFlagsDisplayStat
-	local $sMatchStats
-	local $iColor
-	local $sType, $sText, $sUniqueTier
-
-	local $bNotifySuperior = _GUI_Option("notify-superior")
+	local $sType, $sText
 
 	local $tUnitAny = DllStructCreate("dword iUnitType;dword iClass;dword pad1;dword dwUnitId;dword pad2;dword pUnitData;dword pad3[52];dword pUnit;")
 	local $tItemData = DllStructCreate("dword iQuality;dword pad1[5];dword iFlags;dword pad2[3];dword dwFileIndex; dword pad2[7];byte iEarLevel;")
@@ -868,6 +864,7 @@ func NotifierMain()
 	local $pUniqueItemsTxt = _MemoryRead($g_pD2sgpt + 0xC24, $g_ahD2Handle)
 
 	local $sMatchingLine
+	local $aOnGroundDisplayPool[0][4]
 	local $asNotificationsPool[0][4]
 
 	for $i = 0 to $iPaths - 1
@@ -900,9 +897,10 @@ func NotifierMain()
 				$iFileIndex = DllStructGetData($tItemData, "dwFileIndex")
 
 				; Using the ear level field to check if we've seen this item on the ground before
-				; Resets when the item is picked up or we move too far away
+				; Resets when the item is picked up or we move too far away (search for OnGroundFilterItems func)
 				if (not $g_bNotifierChanged and $iEarLevel <> 0) then continueloop
-				$iNewEarLevel = 1
+				; We are showing items on ground by default
+				DisplayItemOnGround($pUnitData, true)
 
 				$bIsNewItem = BitAND(0x2000, $iFlags) <> 0
 				$bIsSocketed = BitAND(0x800, $iFlags) <> 0
@@ -910,9 +908,7 @@ func NotifierMain()
 
 				$sType = $g_avNotifyCache[$iClass][0]
 				$iTierFlag = $g_avNotifyCache[$iClass][1]
-				$sText = $g_avNotifyCache[$iClass][2]
 
-				local $bShowNotification = False
 				; Match with notifier rules
 				for $j = 0 to UBound($g_avNotifyCompile) - 1
 					if (StringRegExp($sType, $g_avNotifyCompile[$j][$eNotifyFlagsMatch])) then
@@ -926,7 +922,6 @@ func NotifierMain()
 						$iFlagsDisplayName = $g_avNotifyCompile[$j][$eNotifyFlagsName]
 						$iFlagsDisplayStat = $g_avNotifyCompile[$j][$eNotifyFlagsStat]
 
-						local $sGetItemStats = GetItemStats($pCurrentUnit)
 						local $asStatGroups = $g_avNotifyCompile[$j][$eNotifyFlagsMatchStats]
 
 						local $iFlagsCount = $g_aiFlagsCountPerLine[$j]
@@ -939,126 +934,53 @@ func NotifierMain()
 						local $bNotEquipment = $iQuality == $eQualityNormal and $iTierFlag == NotifierFlag("0")
 						local $bShowItemName = $iFlagsDisplayName == NotifierFlag("name")
 						local $bDisplayItemStats = $iFlagsDisplayStat == NotifierFlag("stat")
-						local $bIsMatchByStats = False
-
-						local $asItemName = ""
-						local $asItemType = ""
-						local $asItemStats = ""
-
-                        ; collect a reversed 2d array of stats and color
-                        ; to display as notifications per line
-                        if (UBound($asStatGroups) or $bDisplayItemStats) then
-	                        $asItemStats = HighlightStats($sGetItemStats, $asStatGroups, $bIsMatchByStats)
-                        endif
 
 						if ($iFlagsTier and not BitAND($iFlagsTier, $iTierFlag)) then continueloop
 						if ($iFlagsQuality and not BitAND($iFlagsQuality, BitRotate(1, $iQuality - 1, "D"))) then continueloop
 						if (not $bIsSocketed and BitAND($iFlagsMisc, NotifierFlag("socket"))) then continueloop
+						if (not $bIsEthereal and BitAND($iFlagsMisc, NotifierFlag("eth"))) then continueloop
 
-						; Hide items on ground with "hide" flag
-						if ($bHideItem) then
-							$iNewEarLevel = 2
-							exitloop;
-						endif
-
-						; Show items on ground with "show" flag
-                        if ($bShowItem) then
-                            $iNewEarLevel = 1
-                        endif
-
-                        ; Don't display notification if no match by stats from rule
-                        if (not $bShowItem and UBound($asStatGroups) and not $bIsMatchByStats) then
-							continueloop
-                        endif
-
-						; Notifications section. Assembling text, collecting in pool
-						if ($bIsEthereal) then
-							$sText = "(Eth) " & $sText
-						elseif (BitAND($iFlagsMisc, NotifierFlag("eth"))) then
-							continueloop
-						endif
-
-                        if ($iFlagsColour) then
-                            $iColor = $iFlagsColour - 1
-                        elseif ($bNotEquipment) then
-                            $iColor = $ePrintOrange
-                        else
-                            $iColor = $g_iQualityColor[$iQuality]
-                        endif
-
-                        if ($bNotifySuperior and $iQuality == $eQualitySuperior) then $sText = "Superior " & $sText
-
-                        if(_GUI_Option("unique-tier") and $iQuality == 7) Then
-                            _WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUniqueItemsTxt + ($iFileIndex * 0x14c), DllStructGetPtr($tUniqueItemsTxt), DllStructGetSize($tUniqueItemsTxt), 0)
-                            $iLvl = DllStructGetData($tUniqueItemsTxt, "wLvl")
-                            if($iLvl == 1) Then
-                            elseif ($iLvl <= 100) then
-                                $sUniqueTier = "{TU} "
-                            elseif ($iLvl <= 115) then
-                                $sUniqueTier = "{SU} "
-                            elseif ($iLvl <= 120) then
-                                $sUniqueTier = "{SSU} "
-                            elseif ($iLvl <= 130) then
-                                $sUniqueTier = "{SSSU} "
-                            endif
-                        endif
-
-                        if ($iFlagsColour) then
-                            $sText = StringRegExpReplace($sText, "ÿc.", "")
-                        endif
-
-						; compiling texts for item notifications
-
-                        if ($bShowItemName) then
-                            local $asNewName = ["- " & $sUniqueTier & GetItemName($pCurrentUnit)[2], $iColor]
-                            local $asNewType = ["  " & $sText, $ePrintGrey]
-
-                            $asItemName = $asNewName
-                            $asItemType = $asNewType
-
-                            if(_GUI_Option("oneline-name")) then
-                                local $asNewName = ["- " & $sUniqueTier & GetItemName($pCurrentUnit)[2] & "  " & $sText, $iColor]
-
-                                $asItemName = $asNewName
-                                $asItemType = ""
-                            endif
-                        else
-                            local $asNewType = ["- " & $sUniqueTier & $sText, $iColor]
-                            $asItemName = ""
-                            $asItemType = $asNewType
-                        endif
-
-						; Forming a array of notifications to add to the pool
 
 						; Flags are added to the object because I don't know a more
-						; convenient way to pass them to the function :)
-						local $oFlags = ObjCreate("Scripting.Dictionary")
+                        ; convenient way to pass them to the function :)
+						local $oItemFlags = ObjCreate("Scripting.Dictionary")
 
-						$oFlags.add('$iFlagsColour', $iFlagsColour)
-						$oFlags.add('$iFlagsSound', $iFlagsSound)
-						$oFlags.add('$asStatGroups', $asStatGroups)
-						$oFlags.add('$iFlagsCount', $iFlagsCount)
-						$oFlags.add('$sMatchingLine', $sMatchingLine)
-						$oFlags.add('$bHideItem', $bHideItem)
+						; Collecting flags per item. We need them to display items on ground
+						; and to show notifications
+						$oItemFlags.add('$bHideItem', $bHideItem)
+						$oItemFlags.add('$bShowItem', $bShowItem)
+						$oItemFlags.add('$iFlagsColour', $iFlagsColour)
+						$oItemFlags.add('$iFlagsSound', $iFlagsSound)
+						$oItemFlags.add('$asStatGroups', $asStatGroups)
+						$oItemFlags.add('$iFlagsCount', $iFlagsCount)
+						$oItemFlags.add('$sMatchingLine', $sMatchingLine)
+						$oItemFlags.add('$bIsEthereal', $bIsEthereal)
+						$oItemFlags.add('$bNotEquipment', $bNotEquipment)
+						$oItemFlags.add('$iQuality', $iQuality)
+						$oItemFlags.add('$pCurrentUnit', $pCurrentUnit)
+						$oItemFlags.add('$pUnitData', $pUnitData)
+						$oItemFlags.add('$bDisplayItemStats', $bDisplayItemStats)
+						$oItemFlags.add('$bShowItemName', $bShowItemName)
 
+						; Forming an array of notifications to add to the pool
+                        local $aOnGroundItem[1][4] = [[$sType, $oItemFlags]]
 
-						local $aNotification[1][4] = [[$asItemName, $asItemType, $asItemStats, $oFlags]]
-
-						; $asNotificationsPool represents an array of notifications per item base
-						_ArrayAdd($asNotificationsPool, $aNotification)
-
-						$bShowNotification = True
+                        _ArrayAdd($aOnGroundDisplayPool, $aOnGroundItem)
 					endif
 				next
 
-				_MemoryWrite($pUnitData + 0x48, $g_ahD2Handle, $iNewEarLevel, "byte")
+				local $asPreNotificationsPool = OnGroundFilterItems($aOnGroundDisplayPool)
+
+				; $asNotificationsPool represents an array of notifications per item base
+				$asNotificationsPool = FormatNotifications($asPreNotificationsPool)
 
 				; Display notifications from pool
-				if (not UBound($asNotificationsPool)) then return
 				DisplayNotification($asNotificationsPool)
 
-				redim $asNotificationsPool[0][4]
-				$bShowNotification = False
+				; Clean pools after we done with processing item dropped
+				if (UBound($aOnGroundDisplayPool)) then redim $aOnGroundDisplayPool[0][0]
+				if (UBound($asPreNotificationsPool)) then redim $asPreNotificationsPool[0][0]
+				if (UBound($asNotificationsPool)) then redim $asNotificationsPool[0][0]
 			endif
 		wend
 
@@ -1066,7 +988,160 @@ func NotifierMain()
 	next
 endfunc
 
+func DisplayItemOnGround($pUnitData, $iShow)
+	_MemoryWrite($pUnitData + 0x48, $g_ahD2Handle, $iShow ? 1 : 2, "byte")
+endfunc
+
+func OnGroundFilterItems($aOnGroundDisplayPool)
+	if (UBound($aOnGroundDisplayPool) == 0) then return
+
+	local $asPreNotificationsPool[0][4]
+	local $pUnitData
+	local $bShow = False
+	local $bHide = False
+	local $bWithStatGroups = False
+
+	for $i = 0 to UBound($aOnGroundDisplayPool) - 1
+		local $asType = $aOnGroundDisplayPool[$i][0]
+		local $oFlags = $aOnGroundDisplayPool[$i][1]
+		$bWithStatGroups = UBound($oFlags.item('$asStatGroups')) > 0
+		local $aNotification[1][4] = [[$asType, $oFlags]]
+
+		$pUnitData = $oFlags.item('$pUnitData')
+
+		if ($oFlags.item('$bShowItem')) then
+			$bShow = True
+		endif
+
+		if ($oFlags.item('$bHideItem')) then
+			$bHide = True
+			; We are not adding hidden items to pool
+			continueloop
+		endif
+
+        _ArrayAdd($asPreNotificationsPool, $aNotification)
+	next
+
+	if ($bShow) then
+		DisplayItemOnGround($pUnitData, true)
+	elseif ($bHide) then
+		DisplayItemOnGround($pUnitData, false)
+		redim $asPreNotificationsPool[0][0]
+	else
+		DisplayItemOnGround($pUnitData, true)
+	endif
+
+    return $asPreNotificationsPool
+endfunc
+
+func FormatNotifications($asPreNotificationsPool)
+	if (UBound($asPreNotificationsPool) == 0) then return
+
+	local $asNotificationsPool[0][4]
+
+	for $i = 0 to UBound($asPreNotificationsPool) - 1
+		local $oFlags = $asPreNotificationsPool[$i][1]
+
+		local $pCurrentUnit = $oFlags.item('$pCurrentUnit')
+		local $asStatGroups = $oFlags.item('$asStatGroups')
+		local $bDisplayItemStats = $oFlags.item('$bDisplayItemStats')
+		local $bIsEthereal = $oFlags.item('$bIsEthereal')
+		local $iFlagsColour = $oFlags.item('$iFlagsColour')
+		local $bNotEquipment = $oFlags.item('$bNotEquipment')
+		local $iQuality = $oFlags.item('$iQuality')
+		local $bShowItem = $oFlags.item('$bShowItem')
+		local $bShowItemName = $oFlags.item('$bShowItemName')
+		local $pUnitData = $oFlags.item('$pUnitData')
+
+		local $bIsMatchByStats = False
+
+		local $asItem = GetItemName($pCurrentUnit)
+		local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
+        local $asItemType = $asItem[1]
+        local $asItemStats = ""
+        local $iItemColor = $iFlagsColour - 1
+        local $sPreName = ""
+
+        ; collect a reversed 2d array of stats and color
+        ; to display as notifications per line
+        if (UBound($asStatGroups) or $bDisplayItemStats) then
+			local $sGetItemStats = GetItemStats($pCurrentUnit)
+            $asItemStats = HighlightStats($sGetItemStats, $asStatGroups, $bIsMatchByStats)
+        endif
+
+        ; Don't display notification if no match by stats from rule
+        if (UBound($asStatGroups) and not $bIsMatchByStats) then
+            DisplayItemOnGround($pUnitData, false)
+			continueloop
+        endif
+
+		; Notifications section. Assembling text, collecting in pool
+		if ($bIsEthereal) then
+			$sPreName = "(Eth) " & $sPreName
+		endif
+
+	    if ($bNotEquipment) then
+	        $iItemColor = $ePrintOrange
+	    else
+	        $iItemColor = $g_iQualityColor[$iQuality]
+	    endif
+
+	    if (_GUI_Option("notify-superior") and $iQuality == $eQualitySuperior) then $sPreName = "Superior " & $sPreName
+
+        if(_GUI_Option("unique-tier") and $iQuality == 7) Then
+            _WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUniqueItemsTxt + ($iFileIndex * 0x14c), DllStructGetPtr($tUniqueItemsTxt), DllStructGetSize($tUniqueItemsTxt), 0)
+            local $iLvl = DllStructGetData($tUniqueItemsTxt, "wLvl")
+            if($iLvl == 1) Then
+            elseif ($iLvl <= 100) then
+                $sPreName = "{TU} " & $sPreName
+            elseif ($iLvl <= 115) then
+                $sPreName = "{SU} " & $sPreName
+            elseif ($iLvl <= 120) then
+                $sPreName = "{SSU} " & $sPreName
+            elseif ($iLvl <= 130) then
+                $sPreName = "{SSSU} " & $sPreName
+            endif
+        endif
+
+		; compiling texts for item notifications
+
+        if ($bShowItemName or $bIsMatchByStats) then
+            local $asNewName = ["- " & $asItemName, $iItemColor]
+            local $asNewType = ["  " & $asItemType, $ePrintGrey]
+
+            $asItemName = $asNewName
+            $asItemType = $asNewType
+
+            if(_GUI_Option("oneline-name")) then
+                local $asNewName = ["- " & $sPreName & $asItemName & "  " & $asItemType, $iItemColor]
+
+                $asItemName = $asNewName
+                $asItemType = ""
+            endif
+        else
+            local $asNewType = ["- " & $sPreName & $asItemType, $iItemColor]
+            $asItemName = ""
+            $asItemType = $asNewType
+        endif
+
+        if ($iFlagsColour) then
+            if($bShowItemName) then
+                $asItemName = StringRegExpReplace($asItemName, "ÿc.", "")
+            else
+                $asItemType = StringRegExpReplace($asItemType, "ÿc.", "")
+            endif
+        endif
+
+        local $aNotification[1][4] = [[$asItemName, $asItemType, $asItemStats, $oFlags]]
+
+        _ArrayAdd($asNotificationsPool, $aNotification)
+	next
+
+	return $asNotificationsPool
+endfunc
+
 func DisplayNotification($asNotificationsPool)
+	if (UBound($asNotificationsPool) == 0) then return
 	local $aNotifications = NarrowNotificationsPool($asNotificationsPool)
 
 	if (not UBound($aNotifications)) then return
@@ -1075,8 +1150,8 @@ func DisplayNotification($asNotificationsPool)
 	local $asType = $aNotifications[1]
 	local $asStats = $aNotifications[2]
 	local $oFlags = $aNotifications[3]
-	local $sMatchingLine = $oFlags.item('$sMatchingLine')
 
+	local $sMatchingLine = $oFlags.item('$sMatchingLine')
 	local $iFlagsSound = $oFlags.item('$iFlagsSound')
 
 	; Display item name
@@ -1107,7 +1182,6 @@ endfunc
 ; pool by filtering and prioritising
 func NarrowNotificationsPool($asNotificationsPool)
 	local $aNotifications[0]
-	local $asColoredStats
 	local $iLastFlagsCount
 
 	for $i = 0 to UBound($asNotificationsPool) - 1
@@ -1136,9 +1210,6 @@ func NarrowNotificationsPool($asNotificationsPool)
 
 		$aNotifications = $aPool
     next
-
-	; swap plain stats to colored
-	if (UBound($asColoredStats)) then $aNotifications[2] = $asColoredStats
 
 	return $aNotifications
 endfunc
