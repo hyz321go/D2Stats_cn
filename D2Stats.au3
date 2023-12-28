@@ -865,7 +865,6 @@ func NotifierMain()
 
 	local $sMatchingLine
 	local $aOnGroundDisplayPool[0][4]
-	local $asNotificationsPool[0][4]
 
 	for $i = 0 to $iPaths - 1
 		$pPath = _MemoryRead($pPaths + 4*$i, $g_ahD2Handle)
@@ -972,13 +971,7 @@ func NotifierMain()
 					endif
 				next
 
-				local $asPreNotificationsPool = OnGroundFilterItems($aOnGroundDisplayPool)
-
-				; $asNotificationsPool represents an array of notifications per item base
-				$asNotificationsPool = FormatNotifications($asPreNotificationsPool)
-
-				; Display notifications from pool
-				DisplayNotification($asNotificationsPool)
+				ProcessItems($aOnGroundDisplayPool)
 			endif
 		wend
 
@@ -986,53 +979,74 @@ func NotifierMain()
 	next
 endfunc
 
+func ProcessItems(byref $aOnGroundDisplayPool)
+	local $asNotificationsPool[0][4]
+
+	local $bDelayedHideItem = False
+
+	local $asPreNotificationsPool = OnGroundFilterItems($aOnGroundDisplayPool, $bDelayedHideItem)
+
+	; $asNotificationsPool represents an array of notifications per item base
+	$asNotificationsPool = FormatNotifications($asPreNotificationsPool, $bDelayedHideItem)
+
+	; Display notifications from pool
+	DisplayNotification($asNotificationsPool)
+endfunc
+
 func DisplayItemOnGround($pUnitData, $iShow)
 	_MemoryWrite($pUnitData + 0x48, $g_ahD2Handle, $iShow ? 1 : 2, "byte")
 endfunc
 
-func OnGroundFilterItems($aOnGroundDisplayPool)
+func OnGroundFilterItems(byref $aOnGroundDisplayPool, byref $bDelayedHideItem)
 	if (UBound($aOnGroundDisplayPool) == 0) then return
 
 	local $asPreNotificationsPool[0][4]
 	local $pUnitData
-	local $bShow = False
-	local $bHide = False
+
+	local $bShowOnGround = False
+	local $bHideCompletely = False
+	local $bDisplayNotification = False
 	local $bWithStatGroups = False
 
 	for $i = 0 to UBound($aOnGroundDisplayPool) - 1
 		local $asType = $aOnGroundDisplayPool[$i][0]
 		local $oFlags = $aOnGroundDisplayPool[$i][1]
-		$bWithStatGroups = UBound($oFlags.item('$asStatGroups')) > 0
 		local $aNotification[1][4] = [[$asType, $oFlags]]
 
 		$pUnitData = $oFlags.item('$pUnitData')
 
+		if (UBound($oFlags.item('$asStatGroups')) > 0) then
+			$bWithStatGroups = True
+		endif
+
 		if ($oFlags.item('$bShowItem')) then
-			$bShow = True
+			$bShowOnGround = True
+		elseif ($oFlags.item('$bHideItem')) then
+			$bHideCompletely = True
+		else
+			$bDisplayNotification = True
+            _ArrayAdd($asPreNotificationsPool, $aNotification)
 		endif
 
-		if ($oFlags.item('$bHideItem')) then
-			$bHide = True
-			; We are not adding hidden items to pool
-			continueloop
-		endif
-
-        _ArrayAdd($asPreNotificationsPool, $aNotification)
 	next
 
-	if ($bShow) then
-		DisplayItemOnGround($pUnitData, true)
-	elseif ($bHide) then
-		DisplayItemOnGround($pUnitData, false)
-		redim $asPreNotificationsPool[0][0]
-	else
-		DisplayItemOnGround($pUnitData, true)
-	endif
+	; Clean "on ground" pool after items on ground display processing
+	redim $aOnGroundDisplayPool[0][4]
 
-    return $asPreNotificationsPool
+	if ($bDisplayNotification) then
+		; if at least one rule with "hide" flag is present and we have item stats matching group "in {} brackets"
+		; then we need to delay hiding the item until the stats check is completed (look in FormatNotifications)
+		if ($bHideCompletely and $bWithStatGroups) then $bDelayedHideItem = True
+		; return pool of notifications if at least one rule without "show" or "hide" flags present
+	    return $asPreNotificationsPool
+	elseif ($bShowOnGround) then
+		DisplayItemOnGround($pUnitData, true)
+	elseif ($bHideCompletely) then
+		DisplayItemOnGround($pUnitData, false)
+	endif
 endfunc
 
-func FormatNotifications($asPreNotificationsPool)
+func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 	if (UBound($asPreNotificationsPool) == 0) then return
 
 	local $asNotificationsPool[0][4]
@@ -1070,7 +1084,13 @@ func FormatNotifications($asPreNotificationsPool)
 
         ; Don't display notification if no match by stats from rule
         if (UBound($asStatGroups) and not $bIsMatchByStats) then
-            DisplayItemOnGround($pUnitData, false)
+            if($bDelayedHideItem) then
+                ; if "hide" flag exist -> hide item from ground -> clean pool -> stop processing item
+                DisplayItemOnGround($pUnitData, false)
+                redim $asPreNotificationsPool[0][4]
+                exitloop
+            endif
+            ; else just skip item
 			continueloop
         endif
 
@@ -1133,7 +1153,7 @@ func FormatNotifications($asPreNotificationsPool)
 	return $asNotificationsPool
 endfunc
 
-func DisplayNotification($asNotificationsPool)
+func DisplayNotification(byref $asNotificationsPool)
 	if (UBound($asNotificationsPool) == 0) then return
 	local $aNotifications = NarrowNotificationsPool($asNotificationsPool)
 
