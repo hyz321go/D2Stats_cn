@@ -941,7 +941,6 @@ func NotifierMain()
 						if (not $bIsSocketed and BitAND($iFlagsMisc, NotifierFlag("socket"))) then continueloop
 						if (not $bIsEthereal and BitAND($iFlagsMisc, NotifierFlag("eth"))) then continueloop
 
-
 						; Flags are added to the object because I don't know a more
                         ; convenient way to pass them to the function :)
 						local $oItemFlags = ObjCreate("Scripting.Dictionary")
@@ -1230,13 +1229,18 @@ endfunc
 
 func HighlightStats($sGetItemStats, $asStatGroups, byref $bIsMatchByStats)
 	local $asStats = StringSplit($sGetItemStats, @LF)
+	local $aPlainStats[$asStats[0]][2]
 	local $aColoredStats[$asStats[0]][2]
+	local $iMatchCounter = 0
 
     for $k = 1 to $asStats[0]
         local $sStat = $asStats[$k]
 
 		$aColoredStats[$asStats[0] - $k][0] = $sStat
         $aColoredStats[$asStats[0] - $k][1] = $ePrintBlue
+
+        $aPlainStats[$asStats[0] - $k][0] = $sStat
+        $aPlainStats[$asStats[0] - $k][1] = $ePrintBlue
 
         for $i = 0 to UBound($asStatGroups) - 1
             if ($asStatGroups[$i] == "" or $aColoredStats[$k - 1][1] == $ePrintRed) then
@@ -1245,12 +1249,18 @@ func HighlightStats($sGetItemStats, $asStatGroups, byref $bIsMatchByStats)
 
             if (StringRegExp($sStat, $asStatGroups[$i])) then
                 $aColoredStats[$asStats[0] - $k][1] = $ePrintRed
-                $bIsMatchByStats = True
+                $iMatchCounter += 1
             endif
         next
     next
 
-    return $aColoredStats
+	if ($iMatchCounter == UBound($asStatGroups)) then
+		$bIsMatchByStats = True
+		return $aColoredStats
+	else
+		$bIsMatchByStats = False
+		return $aPlainStats
+	endif
 endfunc
 
 func NotifierPlaySound($iSound)
@@ -1732,22 +1742,24 @@ func OnClick_Forum()
 endfunc
 
 func CreateGUI()
-	global $g_iGroupLines = 16
+	;global $g_iGroupLines = 16
 	global $g_iGroupWidth = 110
 	global $g_iGroupXStart = 8 + $g_iGroupWidth/2
 	global $g_iGUIWidth = 16 + 4*$g_iGroupWidth
-	global $g_iGUIHeight = 34 + 17*$g_iGroupLines
+	global $g_iGUIHeight = 350
 
 	local $sTitle = not @Compiled ? "Test" : StringFormat("D2Stats %s - [%s]", FileGetVersion(@AutoItExe, "FileVersion"), FileGetVersion(@AutoItExe, "Comments"))
 
-	global $g_hGUI = GUICreate($sTitle, $g_iGUIWidth, $g_iGUIHeight)
+	global $g_hGUI = GUICreate($sTitle, $g_iGUIWidth, $g_iGUIHeight, -1, -1, $WS_SIZEBOX)
 	GUISetFont(9 / _GetDPI()[2], 0, 0, "Courier New")
 	GUISetOnEvent($GUI_EVENT_CLOSE, "_Exit")
 
-	global $g_idReadStats = GUICtrlCreateButton("Read", $g_iGroupXStart-35, $g_iGUIHeight-31, 70, 25)
+	local $iBottomButtonCoords = $g_iGUIHeight - 60
+
+	global $g_idReadStats = GUICtrlCreateButton("Read", $g_iGroupXStart-35, $iBottomButtonCoords, 70, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_ReadStats")
 
-	global $g_idReadMercenary = GUICtrlCreateCheckbox("Mercenary", $g_iGroupXStart-35 + 78, $g_iGUIHeight-31)
+	global $g_idReadMercenary = GUICtrlCreateCheckbox("Mercenary", $g_iGroupXStart-35 + 78, $iBottomButtonCoords)
 
 	global $g_idTab = GUICtrlCreateTab(0, 0, $g_iGUIWidth, 0, $TCS_FOCUSNEVER)
 	GUICtrlSetOnEvent(-1, "OnClick_Tab")
@@ -1901,16 +1913,14 @@ func CreateGUI()
 	global $g_idNotifyRulesDelete = GUICtrlCreateButton("Delete", $iComboWidth + 2 * $iButtonWidth + 4 * $iControlMargin, _GUI_LineY(0), $iButtonWidth, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyDelete")
 
-	local $iNotifyY = $g_iGUIHeight - 29
-
-	global $g_idNotifyEdit = GUICtrlCreateEdit("", 4, _GUI_LineY(2), $g_iGUIWidth - 8, $iNotifyY - _GUI_LineY(2) - 5)
-	global $g_idNotifySave = GUICtrlCreateButton("Save", 4 + 0*62, $iNotifyY, 60, 25)
+	global $g_idNotifyEdit = GUICtrlCreateEdit("", 4, _GUI_LineY(2), $g_iGUIWidth - 8, $iBottomButtonCoords - _GUI_LineY(2) - 5)
+	global $g_idNotifySave = GUICtrlCreateButton("Save", 4 + 0*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifySave")
-	global $g_idNotifyReset = GUICtrlCreateButton("Reset", 4 + 1*62, $iNotifyY, 60, 25)
+	global $g_idNotifyReset = GUICtrlCreateButton("Reset", 4 + 1*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyReset")
-	global $g_idNotifyTest = GUICtrlCreateButton("Help", 4 + 2*62, $iNotifyY, 60, 25)
+	global $g_idNotifyTest = GUICtrlCreateButton("Help", 4 + 2*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyHelp")
-	GUICtrlCreateButton("Default", 4 + 3*62, $iNotifyY, 60, 25)
+	GUICtrlCreateButton("Default", 4 + 3*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyDefault")
 
 	OnClick_NotifyReset()
@@ -1947,7 +1957,7 @@ func CreateGUI()
 
 	_GUI_NewTextBasic(08, "Hotkeys can be disabled by setting them to ESC.", False)
 
-	GUICtrlCreateButton("Forum", 4 + 0*62, $iNotifyY, 60, 25)
+	GUICtrlCreateButton("Forum", 4 + 0*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_Forum")
 
 	GUICtrlCreateTabItem("")
