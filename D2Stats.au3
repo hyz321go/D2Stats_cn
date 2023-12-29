@@ -1011,10 +1011,11 @@ func OnGroundFilterItems(byref $aOnGroundDisplayPool, byref $bDelayedHideItem)
 		local $asType = $aOnGroundDisplayPool[$i][0]
 		local $oFlags = $aOnGroundDisplayPool[$i][1]
 		local $aNotification[1][4] = [[$asType, $oFlags]]
+		local $bStatGroupsExists = UBound($oFlags.item('$asStatGroups')) > 0
 
 		$pUnitData = $oFlags.item('$pUnitData')
 
-		if (UBound($oFlags.item('$asStatGroups')) > 0) then
+		if ($bStatGroupsExists) then
 			$bWithStatGroups = True
 		endif
 
@@ -1023,7 +1024,7 @@ func OnGroundFilterItems(byref $aOnGroundDisplayPool, byref $bDelayedHideItem)
 		elseif ($oFlags.item('$bHideItem')) then
 			$bHideCompletely = True
 		else
-			$bDisplayNotification = True
+			if (not $bStatGroupsExists) then $bDisplayNotification = True
             _ArrayAdd($asPreNotificationsPool, $aNotification)
 		endif
 
@@ -1032,17 +1033,28 @@ func OnGroundFilterItems(byref $aOnGroundDisplayPool, byref $bDelayedHideItem)
 	; Clean "on ground" pool after items on ground display processing
 	redim $aOnGroundDisplayPool[0][4]
 
-	if ($bDisplayNotification) then
-		; if at least one rule with "hide" flag is present and we have item stats matching group "in {} brackets"
-		; then we need to delay hiding the item until the stats check is completed (look in FormatNotifications)
-		if ($bHideCompletely and $bWithStatGroups) then $bDelayedHideItem = True
-		; return pool of notifications if at least one rule without "show" or "hide" flags present
-	    return $asPreNotificationsPool
-	elseif ($bShowOnGround) then
-		DisplayItemOnGround($pUnitData, true)
-	elseif ($bHideCompletely) then
-		DisplayItemOnGround($pUnitData, false)
-	endif
+	select
+        case $bDisplayNotification
+			; return pool of notifications if at least one rule without "show" or "hide" flags present
+		    return $asPreNotificationsPool
+
+        case $bShowOnGround
+			DisplayItemOnGround($pUnitData, true)
+	        if ($bWithStatGroups) then return $asPreNotificationsPool
+
+        case $bHideCompletely
+			; if rule with "hide" flag is present and we have item stats matching group "in {} brackets"
+			; then we need to delay hiding the item until the stats check is completed (look in FormatNotifications)
+			if ($bWithStatGroups) then
+				$bDelayedHideItem = True
+		        return $asPreNotificationsPool
+			else
+				DisplayItemOnGround($pUnitData, false)
+			endif
+
+        case $bWithStatGroups
+			return $asPreNotificationsPool
+    endselect
 endfunc
 
 func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
@@ -1079,6 +1091,7 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
         if (UBound($asStatGroups) or $bDisplayItemStats) then
 			local $sGetItemStats = GetItemStats($pCurrentUnit)
             $asItemStats = HighlightStats($sGetItemStats, $asStatGroups, $bIsMatchByStats)
+            $oFlags.add('$bIsMatchByStats', $bIsMatchByStats)
         endif
 
         ; Don't display notification if no match by stats from rule
@@ -1208,8 +1221,14 @@ func NarrowNotificationsPool($asNotificationsPool)
 		local $isColored = $oFlags.item('$isColored')
 		local $iFlagsCount = $oFlags.item('$iFlagsCount')
 		local $asStatGroups = $oFlags.item('$asStatGroups')
+		local $bIsMatchByStats = $oFlags.item('$bIsMatchByStats')
 
-		if ($isColored) then
+		if ($bIsMatchByStats) then
+			$aNotifications = $aPool
+			if(_GUI_Option("debug-notifier")) then PrintString('match by stats', $ePrintRed)
+			continueloop;
+
+		elseif ($isColored) then
 			$aNotifications = $aPool
 			if(_GUI_Option("debug-notifier")) then PrintString('match by color', $ePrintRed)
 			continueloop;
@@ -1254,7 +1273,7 @@ func HighlightStats($sGetItemStats, $asStatGroups, byref $bIsMatchByStats)
         next
     next
 
-	if ($iMatchCounter == UBound($asStatGroups)) then
+	if ($iMatchCounter >= UBound($asStatGroups)) then
 		$bIsMatchByStats = True
 		return $aColoredStats
 	else
