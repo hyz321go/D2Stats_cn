@@ -1,48 +1,48 @@
 name: Release
 
-on: 
-  push:
-    tags:
-    - '*'
+on:
+    push:
+        tags:
+            - "*"
 
 jobs:
-  build:
-    runs-on: windows-latest
-    environment: build
-    permissions:
-      contents: write
+    build:
+        runs-on: windows-latest
+        environment: build
+        permissions:
+            contents: write
 
-    defaults:
-      run:
-        shell: bash
+        defaults:
+            run:
+                shell: bash
 
-    steps:
-      - uses: actions/checkout@v3
+        steps:
+            - uses: actions/checkout@v3
 
-      - name: Get tag name
-        id: tagName
-        uses: olegtarasov/get-tag@v2.1.1
+            - name: Get tag name
+              id: tagName
+              uses: olegtarasov/get-tag@v2.1.1
 
-      - name: Replace versions
-        run: bash replace-version.sh ${{ steps.tagName.outputs.tag }}
+            - name: Replace versions
+              run: bash replace-version.sh ${{ steps.tagName.outputs.tag }}
 
-      - name: Compile
-        shell: cmd
-        run: ./Compile.bat
+            - name: Compile
+              shell: cmd
+              run: ./Compile.bat
 
-      - name: Collect Assets
-        run: bash collect-assets.sh
+            - name: Collect Assets
+              run: bash collect-assets.sh
 
-      - name: Zip file
-        uses: TheDoctor0/zip-release@0.6.0
-        with:
-          directory: './'
-          path: './dest/*'
-          type: 'zip'
-          filename: 'D2Stats_${{ steps.tagName.outputs.tag }}.zip'
+            - name: Zip file
+              uses: TheDoctor0/zip-release@0.6.0
+              with:
+                  directory: "./"
+                  path: "./dest/*"
+                  type: "zip"
+                  filename: "D2Stats.zip"
 
-      - name: Release Zip file
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: ./D2Stats_${{ steps.tagName.outputs.tag }}.zip
-          generateReleaseNotes: true
+            - name: Release Zip file
+              uses: ncipollo/release-action@v1
+              with:
+                  artifacts: ./D2Stats.zip
+                  generateReleaseNotes: true
