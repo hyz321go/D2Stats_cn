@@ -1147,7 +1147,7 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
                 $asItemName = $asNewName
                 $asItemType = ""
             else
-	            local $asNewName = ["- " & $asItemName, $iItemColor]
+	            local $asNewName = ["- " & $sPreName & $asItemName, $iItemColor]
 	            local $asNewType = ["  " & $asItemType, $ePrintGrey]
 
 	            $asItemName = $asNewName
