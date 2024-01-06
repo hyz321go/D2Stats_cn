@@ -1223,6 +1223,7 @@ func NarrowNotificationsPool($asNotificationsPool)
 
 	for $i = 0 to UBound($asNotificationsPool) - 1
 		local $aPool[4] = [$asNotificationsPool[$i][0], $asNotificationsPool[$i][1], $asNotificationsPool[$i][2], $asNotificationsPool[$i][3]]
+		local $oFlags = $aPool[3]
 
 		local $iFlagsColour = $oFlags.item('$iFlagsColour')
 		local $iFlagsCount = $oFlags.item('$iFlagsCount')
