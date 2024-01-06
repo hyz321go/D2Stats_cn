@@ -1131,7 +1131,7 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
         endif
 
         if ($iFlagsColour) then
-            if($asItemName and $bShowItemName) then
+            if(($asItemName and $bShowItemName) or $bNotEquipment) then
                 $asItemName = StringRegExpReplace($asItemName, "ÿc.", "")
             else
                 $asItemType = StringRegExpReplace($asItemType, "ÿc.", "")
@@ -1140,23 +1140,29 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 
 		; compiling texts for item notifications
 
-        if ($asItemName and ($bShowItemName or $bIsMatchByStats)) then
-            if(_GUI_Option("oneline-name")) then
-                local $asNewName = ["- " & $sPreName & $asItemName & "  " & $asItemType, $iItemColor]
+		if ($bNotEquipment) then
+            local $asNewName = ["- " & $sPreName & $asItemName, $iItemColor]
+            $asItemName = $asNewName
+            $asItemType = ""
+        else
+	        if ($asItemName and ($bShowItemName or $bIsMatchByStats)) then
+	            if(_GUI_Option("oneline-name")) then
+	                local $asNewName = ["- " & $sPreName & $asItemName & "  " & $asItemType, $iItemColor]
 
-                $asItemName = $asNewName
-                $asItemType = ""
-            else
-	            local $asNewName = ["- " & $sPreName & $asItemName, $iItemColor]
-	            local $asNewType = ["  " & $asItemType, $ePrintGrey]
+	                $asItemName = $asNewName
+	                $asItemType = ""
+	            else
+		            local $asNewName = ["- " & $sPreName & $asItemName, $iItemColor]
+		            local $asNewType = ["  " & $asItemType, $ePrintGrey]
 
-	            $asItemName = $asNewName
+		            $asItemName = $asNewName
+		            $asItemType = $asNewType
+	            endif
+	        else
+	            local $asNewType = ["- " & $sPreName & $asItemType, $iItemColor]
+	            $asItemName = ""
 	            $asItemType = $asNewType
             endif
-        else
-            local $asNewType = ["- " & $sPreName & $asItemType, $iItemColor]
-            $asItemName = ""
-            $asItemType = $asNewType
         endif
 
         local $aNotification[1][4] = [[$asItemName, $asItemType, $asItemStats, $oFlags]]
@@ -1211,39 +1217,47 @@ func NarrowNotificationsPool($asNotificationsPool)
 	local $aNotifications[0]
 	local $iLastFlagsCount
 
+	local $aPrioritizeByStats = False
+	local $aPrioritizeByColour = False
+	local $aPrioritizeByFlagsCount = False
+
 	for $i = 0 to UBound($asNotificationsPool) - 1
-		local $asName = $asNotificationsPool[$i][0]
-		local $asType = $asNotificationsPool[$i][1]
-		local $asStats = $asNotificationsPool[$i][2]
-		local $oFlags = $asNotificationsPool[$i][3]
+		local $aPool[4] = [$asNotificationsPool[$i][0], $asNotificationsPool[$i][1], $asNotificationsPool[$i][2], $asNotificationsPool[$i][3]]
 
-		local $aPool[4] = [$asName, $asType, $asStats, $oFlags]
-
-
-		local $isColored = $oFlags.item('$isColored')
+		local $iFlagsColour = $oFlags.item('$iFlagsColour')
 		local $iFlagsCount = $oFlags.item('$iFlagsCount')
-		local $asStatGroups = $oFlags.item('$asStatGroups')
 		local $bIsMatchByStats = $oFlags.item('$bIsMatchByStats')
 
 		if ($bIsMatchByStats) then
-			$aNotifications = $aPool
-			if(_GUI_Option("debug-notifier")) then PrintString('match by stats', $ePrintRed)
+			$aPrioritizeByStats = $aPool
 			continueloop;
 
-		elseif ($isColored) then
-			$aNotifications = $aPool
-			if(_GUI_Option("debug-notifier")) then PrintString('match by color', $ePrintRed)
+		elseif ($iFlagsColour) then
+			$aPrioritizeByColour = $aPool
 			continueloop;
 
 		elseif ($iFlagsCount > $iLastFlagsCount or $iFlagsCount == 0) then
-			$aNotifications = $aPool
+			$aPrioritizeByFlagsCount = $aPool
 			$iLastFlagsCount = $iFlagsCount
-			if(_GUI_Option("debug-notifier")) then PrintString($iFlagsCount & ' match by flags count', $ePrintRed)
 			continueloop;
 		endif
-
-		$aNotifications = $aPool
     next
+
+    if (UBound($aPrioritizeByStats)) then
+			$aNotifications = $aPrioritizeByStats
+			if(_GUI_Option("debug-notifier")) then PrintString('match by stats', $ePrintRed)
+
+    elseif (UBound($aPrioritizeByColour)) then
+			$aNotifications = $aPrioritizeByColour
+			if(_GUI_Option("debug-notifier")) then PrintString('match by color', $ePrintRed)
+
+    elseif (UBound($aPrioritizeByFlagsCount)) then
+			$aNotifications = $aPrioritizeByFlagsCount
+			if(_GUI_Option("debug-notifier")) then PrintString($iFlagsCount & ' match by flags count', $ePrintRed)
+
+    else
+		$aNotifications = $aPool
+	endif
 
 	return $aNotifications
 endfunc
