@@ -1640,9 +1640,9 @@ func OnClick_NotifyHelp()
         '', _
         'Example 3:', _
         'hide "Amulet$" normal rare magic', _
-        '"Amulet$" {[3-5] to All Skills}', _
-        'This would hide every normal rare magic amulet on ground, except', _
-        'sacred amulets with 3-5 to All skills', _
+        '"Amulet$" rare {[3-5] to All Skills}', _
+        'This would hide every normal, rare, magic amulet on ground, except', _
+        'rare amulets with 3-5 to All skills', _
 		'', _
         'Example 4:', _
         '"Amulet$" {[3-5] to All Skills} {Spell Focus} {to Spell Damage}', _

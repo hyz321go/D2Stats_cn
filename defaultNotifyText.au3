@@ -1,5 +1,5 @@
 global const $g_sNotifyTextDefault = "hide ""^Gold$""" & @CRLF & _
-"hide 1 2 3 4 sacred normal rare magic unique" & @CRLF & _
+"hide 1 2 3 4 sacred low normal rare magic unique" & @CRLF & _
 "hide ""Ring$|Amulet$|Jewel"" normal rare magic" & @CRLF & _
 "hide ""Quiver"" normal rare magic" & @CRLF & _
 "hide ""(Amethyst|Topaz|Sapphire|Emerald|Ruby|Diamond|Skull|Onyx|Bloodstone|Turquoise|Amber|Rainbow Stone)""" & @CRLF & _
@@ -30,11 +30,11 @@ global const $g_sNotifyTextDefault = "hide ""^Gold$""" & @CRLF & _
 """Mystic Dye""" & @CRLF & _
 """Book of Cain""" & @CRLF & _
 """Oil of (Conjuration|Augmentation|Greater Luck|Intensity)"" sound4" & @CRLF & _
-"""Arcane (Shard|Crystal)""" & @CRLF & _
 """Quest Item""" & @CRLF & _
 """Positronic Brain""" & @CRLF & _
 """Occult Effigy"" purple" & @CRLF & _
 """Reagent""" & @CRLF & _
+"""Arcane (Shard|Crystal)""" & @CRLF & _
 """Mastercrafted"" sound6" & @CRLF & _
 "" & @CRLF & _
 "#""(Pul|Um|Mal|Ist|Gul|Vex|Ohm|Lo) Rune"" red" & @CRLF & _
