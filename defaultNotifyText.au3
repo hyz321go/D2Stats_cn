@@ -54,22 +54,10 @@ global const $g_sNotifyTextDefault = "hide ""^Gold$""" & @CRLF & _
 """Shrine \(10""                # Shrines" & @CRLF & _
 """Ring$|Amulet"" rare          # Rare rings and amulets" & @CRLF & _
 "" & @CRLF & _
-"#show ""Super Mana Potion""" & @CRLF & _
-"#show ""(Greater|Super) Healing Potion""" & @CRLF & _
+"show ""Super Mana Potion""" & @CRLF & _
+"show ""(Greater|Super) Healing Potion""" & @CRLF & _
 "" & @CRLF & _
 "#jewelry" & @CRLF & _
-"""Amulet"" {[3-5] to All Skills}" & @CRLF & _
-"""Ring$"" {Skills}" & @CRLF & _
-"show ""Jewel""" & @CRLF & _
-"" & @CRLF & _
-"#items" & @CRLF & _
-"""(Circlet|Coronet|Tiara|Diadem)"" sacred rare" & @CRLF & _
-"""Leather Gloves"" sacred rare" & @CRLF & _
-"""^Gauntlets"" sacred rare" & @CRLF & _
-"""Quilted Armor"" sacred rare" & @CRLF & _
-"""Light Plate\s"" sacred rare" & @CRLF & _
-"""Ancient Armor"" sacred rare" & @CRLF & _
-"""(Sash|Plated Belt)"" sacred rare" & @CRLF & _
-"""(^Boots)"" sacred rare" & @CRLF & _
-"""Greaves"" sacred rare" & @CRLF & _
-"""Spiked Shield"" sacred rare"
+"#""Amulet"" {[3-5] to All Skills}" & @CRLF & _
+"#""Ring$"" {Skills}" & @CRLF & _
+"show ""Jewel"""
