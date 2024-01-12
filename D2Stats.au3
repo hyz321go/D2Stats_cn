@@ -84,9 +84,12 @@ func Main()
 			UpdateGUIOptions()
 
 			if (IsIngame()) then
-				if (not $bIsIngame) then $g_bNotifyCache = True
 
-				InjectFunctions()
+				; why inject every frame if we can just inject once?
+				if (not $bIsIngame) then 
+					$g_bNotifyCache = True
+					InjectFunctions()
+				endif
 
 				if (_GUI_Option("mousefix") <> IsMouseFixEnabled()) then ToggleMouseFix()
 
@@ -902,6 +905,9 @@ func NotifierMain()
 				if (not $g_bNotifierChanged and $iEarLevel <> 0) then continueloop
 				; We are showing items on ground by default
 				DisplayItemOnGround($pUnitData, true)
+
+				; DEBUG ONLY
+				PrintString(GetUnitStat($pCurrentUnit, 0xC2))
 
 				$bIsNewItem = BitAND(0x2000, $iFlags) <> 0
 				$bIsSocketed = BitAND(0x800, $iFlags) <> 0
@@ -2238,11 +2244,27 @@ func GetItemStats($pUnit)
 	return GetOutputString(2048)
 endfunc
 
+func GetUnitStat($pUnit, $iStat)
+	if (not IsIngame()) then return 0
+	_MemoryWrite($g_pD2InjectParams, $g_ahD2Handle, $iStat, "dword")
+	_MemoryWrite($g_pD2InjectParams + 0x4, $g_ahD2Handle, $pUnit, "dword")
+	RemoteThread($g_pD2Common_GetUnitStat, $g_pD2InjectParams)
+	if (@error) then return _Log("GetUnitStat", "Failed to create remote thread.")
+	return GetOutputNumber()
+endfunc
+
 func GetOutputString($length)
 	if (not IsIngame()) then return ""
 	local $sString = _MemoryRead($g_pD2InjectString, $g_ahD2Handle, StringFormat("wchar[%s]", $length))
 	if (@error) then return _Log("GetOutputString", "Failed to create remote thread.")
 	return $sString
+endfunc
+
+func GetOutputNumber()
+	if (not IsIngame()) then return 0
+	local $iNumber = _MemoryRead($g_pD2InjectString, $g_ahD2Handle, "dword")
+	if (@error) then return _Log("GetOutputNumber", "Failed to create remote thread.")
+	return $iNumber
 endfunc
 
 
@@ -2381,7 +2403,7 @@ func InjectFunctions()
 	D2Client.dll+CDE08 - E8 *                  - call D2Client.dll+7D850
 	D2Client.dll+CDE0D - C3                    - ret
 #ce
-	local $iPrintOffset = ($g_hD2Client + 0x7D850) - ($g_hD2Client + 0xCDE0D)
+	local $iPrintOffset = ($g_hD2Client + 0x7D850) - ($g_hD2Client + 0xCDE0E)
 	local $sWrite = "0x5368" & SwapEndian($g_pD2InjectString) & "31C0E8" & SwapEndian($iPrintOffset) & "C3"
 	local $bPrint = InjectCode($g_pD2InjectPrint, $sWrite)
 
@@ -2402,7 +2424,7 @@ func InjectFunctions()
 	D2Client.dll+CDE2B - E8 *                  - call D2Client.dll+914F0
 	D2Client.dll+CDE30 - C3                    - ret
 #ce
-	local $iIDWNT = ($g_hD2Client + 0x914F0) - ($g_hD2Client + 0xCDE30)
+	local $iIDWNT = ($g_hD2Client + 0x914F0) - ($g_hD2Client + 0xCDE31)
 	$sWrite = "0x680001000068" & SwapEndian($g_pD2InjectString) & "53E8" & SwapEndian($iIDWNT) & "C3"
 	local $bGetItemName = InjectCode($g_pD2Client_GetItemName, $sWrite)
 
@@ -2416,11 +2438,23 @@ func InjectFunctions()
 	D2Client.dll+CDE50 - 5F                    - pop edi
 	D2Client.dll+CDE51 - C3                    - ret
 #ce
-	local $iIDWNTT = ($g_hD2Client + 0x560B0) - ($g_hD2Client + 0xCDE50)
+	local $iIDWNTT = ($g_hD2Client + 0x560B0) - ($g_hD2Client + 0xCDE4E)
 	$sWrite = "0x57BF" & SwapEndian($g_pD2InjectString) & "6A006A0153E8" & SwapEndian($iIDWNTT) & "5FC3"
 	local $bGetItemStat = InjectCode($g_pD2Client_GetItemStat, $sWrite)
 
-	return $bPrint and $bGetString and $bGetItemName and $bGetItemStat
+#cs 
+	D2Client.dll+CDE54 - 6A 00                 - push 00
+	D2Client.dll+CDE56 - FF 33                 - push [ebx]
+	D2Client.dll+CDE58 - FF 73 04              - push [ebx+04]
+	D2Client.dll+CDE5B - E8 10AD2000           - call D2Common.Ordinal10973
+	D2Client.dll+CDE60 - A3 *                  - mov *,eax
+	D2Client.dll+CDE65 - C3                    - ret 
+#ce
+	local $iIDWNT3 = ($g_hD2Common + 0x38B70) - ($g_hD2Client + 0xCDE60)
+	$sWrite = "0x6A00FF33FF7304E8" & SwapEndian($iIDWNT3) & "A3" & SwapEndian($g_pD2InjectString) & "C3"
+	local $bGetUnitStat = InjectCode($g_pD2Common_GetUnitStat, $sWrite)
+
+	return $bPrint and $bGetString and $bGetItemName and $bGetItemStat and $bGetUnitStat
 endfunc
 
 func UpdateDllHandles()
@@ -2447,12 +2481,15 @@ func UpdateDllHandles()
 	$g_hD2Sigma = $hDLLHandle[4]
 
 	local $pD2Inject = $g_hD2Client + 0xCDE00
-	$g_pD2InjectPrint = $pD2Inject + 0x0
-	$g_pD2InjectGetString = $pD2Inject + 0x10
-	$g_pD2Client_GetItemName = $pD2Inject + 0x20;
-	$g_pD2Client_GetItemStat = $pD2Inject + 0x40;
+	$g_pD2InjectPrint = $pD2Inject + 0x01 ; memory alignment
+	$g_pD2InjectGetString = $pD2Inject + 0x11
+	$g_pD2Client_GetItemName = $pD2Inject + 0x21
+	$g_pD2Client_GetItemStat = $pD2Inject + 0x3E
+	$g_pD2Common_GetUnitStat = $pD2Inject + 0x54
 	;~ make more room for full item description
 	$g_pD2InjectString = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x1000, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	;~ make room for params array
+	$g_pD2InjectParams = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
 
 	$g_pD2sgpt = _MemoryRead($g_hD2Common + 0x99E1C, $g_ahD2Handle)
 
@@ -2520,7 +2557,7 @@ func DefineGlobals()
 
 	global $g_iD2pid, $g_iUpdateFailCounter
 
-	global $g_pD2sgpt, $g_pD2InjectPrint, $g_pD2InjectString, $g_pD2InjectGetString, $g_pD2Client_GetItemName, $g_pD2Client_GetItemStat
+	global $g_pD2sgpt, $g_pD2InjectPrint, $g_pD2InjectString, $g_pD2InjectParams, $g_pD2InjectGetString, $g_pD2Client_GetItemName, $g_pD2Client_GetItemStat, $g_pD2Common_GetUnitStat
 
 	global $g_bHotkeysEnabled = False
 	global $g_ShowItems = False
