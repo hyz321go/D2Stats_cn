@@ -906,9 +906,6 @@ func NotifierMain()
 				; We are showing items on ground by default
 				DisplayItemOnGround($pUnitData, true)
 
-				; DEBUG ONLY
-				PrintString(GetUnitStat($pCurrentUnit, 0xC2))
-
 				$bIsNewItem = BitAND(0x2000, $iFlags) <> 0
 				$bIsSocketed = BitAND(0x800, $iFlags) <> 0
 				$bIsEthereal = BitAND(0x400000, $iFlags) <> 0
@@ -1137,7 +1134,7 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
         endif
 
         if ($iFlagsColour) then
-            if(($asItemName and $bShowItemName) or $bNotEquipment) then
+            if($asItemName and $bShowItemName) then
                 $asItemName = StringRegExpReplace($asItemName, "ÿc.", "")
             else
                 $asItemType = StringRegExpReplace($asItemType, "ÿc.", "")
@@ -1146,7 +1143,7 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 
 		; compiling texts for item notifications
 
-		if ($bNotEquipment) then
+		if (StringInStr($asItemType, "Cube reagent")) then
             local $asNewName = ["- " & $sPreName & $asItemName, $iItemColor]
             $asItemName = $asNewName
             $asItemType = ""
@@ -1192,6 +1189,7 @@ func DisplayNotification(byref $asNotificationsPool)
 
 	local $sMatchingLine = $oFlags.item('$sMatchingLine')
 	local $iFlagsSound = $oFlags.item('$iFlagsSound')
+	local $pCurrentUnit = $oFlags.item('$pCurrentUnit')
 
 	; Display item name
 	if (UBound($asName)) then
@@ -1209,6 +1207,14 @@ func DisplayNotification(byref $asNotificationsPool)
             if ($asStats[$n][0] <> "") then
                 PrintString("  " & $asStats[$n][0], $asStats[$n][1])
             endif
+
+			if($n == UBound($asStats) - 1) then
+				local $iSockets = GetUnitStat($pCurrentUnit, 0xC2)
+
+				if($iSockets > 0) then
+					PrintString("  " & "Socketed (" & $iSockets & ")", $asStats[$n][1])
+				endif
+			endif
         next
 	endif
 

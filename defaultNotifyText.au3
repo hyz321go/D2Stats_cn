@@ -20,28 +20,41 @@ global const $g_sNotifyTextDefault = "hide ""^Gold$""" & @CRLF & _
 """Occult Effigy""" & @CRLF & _
 """Mystic Dye""" & @CRLF & _
 """Treasure""" & @CRLF & _
-"""Tenet""" & @CRLF & _
 """Item Design""" & @CRLF & _
 """Mystic Dye""" & @CRLF & _
 """Belladonna""" & @CRLF & _
 """Enchanted Rune"" sound4" & @CRLF & _
 """Relic"" sound4" & @CRLF & _
-"""Fragment""" & @CRLF & _
 """Mystic Dye""" & @CRLF & _
 """Book of Cain""" & @CRLF & _
 """Oil of (Conjuration|Augmentation|Greater Luck|Intensity)"" sound4" & @CRLF & _
-"""Quest Item""" & @CRLF & _
 """Positronic Brain""" & @CRLF & _
 """Occult Effigy"" purple" & @CRLF & _
 """Reagent""" & @CRLF & _
 """Arcane (Shard|Crystal)""" & @CRLF & _
 """Mastercrafted"" sound6" & @CRLF & _
 "" & @CRLF & _
+"#Quest items" & @CRLF & _
+"""Ring of the Five""" & @CRLF & _
+"""Signet of Skill""" & @CRLF & _
+"""Tome of Possession""" & @CRLF & _
+"""Sigil$""" & @CRLF & _
+"""Dimensional Link""" & @CRLF & _
+"""Key of Lies""" & @CRLF & _
+"""Key of Sin""" & @CRLF & _
+"""Askari Call""" & @CRLF & _
+"""Tenet""" & @CRLF & _
+"""Riftstone""" & @CRLF & _
+"""Fragment""" & @CRLF & _
+"""Star Chart""" & @CRLF & _
+"""Otherworldly Link""" & @CRLF & _
+"""Damned""" & @CRLF & _
+"""Scroll of Summoning""" & @CRLF & _
+"" & @CRLF & _
 "#""(Pul|Um|Mal|Ist|Gul|Vex|Ohm|Lo) Rune"" red" & @CRLF & _
 "#""(Sur|Ber|Jah|Cham|Zod) Rune"" purple" & @CRLF & _
 "#""Perfect (Turquoise|Amber|Bloodstone|Onyx)"" red" & @CRLF & _
 "" & @CRLF & _
-"#""Ring of the Five""" & @CRLF & _
 "#""Quiver"" rare" & @CRLF & _
 """Quiver"" unique" & @CRLF & _
 "sacred eth superior rare" & @CRLF & _
