@@ -1190,6 +1190,7 @@ func DisplayNotification(byref $asNotificationsPool)
 	local $sMatchingLine = $oFlags.item('$sMatchingLine')
 	local $iFlagsSound = $oFlags.item('$iFlagsSound')
 	local $pCurrentUnit = $oFlags.item('$pCurrentUnit')
+	local $iQuality = $oFlags.item('$iQuality')
 
 	; Display item name
 	if (UBound($asName)) then
@@ -1208,7 +1209,7 @@ func DisplayNotification(byref $asNotificationsPool)
                 PrintString("  " & $asStats[$n][0], $asStats[$n][1])
             endif
 
-			if($n == UBound($asStats) - 1) then
+			if($n == UBound($asStats) - 1 and $iQuality > 0 and $iQuality < 5) then
 				local $iSockets = GetUnitStat($pCurrentUnit, 0xC2)
 
 				if($iSockets > 0) then
