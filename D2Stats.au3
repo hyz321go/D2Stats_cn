@@ -1133,18 +1133,16 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
             endif
         endif
 
-        if ($iFlagsColour) then
-            if($asItemName and $bShowItemName) then
-                $asItemName = StringRegExpReplace($asItemName, "ÿc.", "")
-            else
-                $asItemType = StringRegExpReplace($asItemType, "ÿc.", "")
-            endif
+        if ($iFlagsColour or $bNotEquipment) then
+            $asItemName = StringRegExpReplace($asItemName, "ÿc.", "")
+            $asItemType = StringRegExpReplace($asItemType, "ÿc.", "")
         endif
 
 		; compiling texts for item notifications
 
-		if (StringInStr($asItemType, "Cube reagent")) then
-            local $asNewName = ["- " & $sPreName & $asItemName, $iItemColor]
+		if ($bNotEquipment) then
+			local $sCombinedName = $asItemName == "" ? $asItemType : $asItemName
+            local $asNewName = ["- " & $sPreName & $sCombinedName, $iItemColor]
             $asItemName = $asNewName
             $asItemType = ""
         else
