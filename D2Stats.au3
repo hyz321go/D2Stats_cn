@@ -1290,7 +1290,7 @@ func HighlightStats($sGetItemStats, $asStatGroups, byref $bIsMatchByStats)
         $aPlainStats[$asStats[0] - $k][1] = $ePrintBlue
 
         for $i = 0 to UBound($asStatGroups) - 1
-            if ($asStatGroups[$i] == "" or $aColoredStats[$k - 1][1] == $ePrintRed) then
+            if ($asStatGroups[$i] == "" or $aColoredStats[$asStats[0] - $k][1] == $ePrintRed) then
                 continueloop
             endif
 
