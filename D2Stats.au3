@@ -1126,7 +1126,15 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 			ÿc;符文：尼夫 Nif
 		#ce		
 		;~ local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
-		local $asItemName = UBound($asItem) >= 3 ? $asItem[2] : ""      ; 暂时解决吐槽装备name不显示问题
+		;~ local $asItemName = UBound($asItem) >= 3 ? $asItem[2] : ""      ; 暂时解决吐槽装备name不显示问题
+		Local $asItemName = ""      ; 现在被“吐槽”的暗金球和强化符文也可以正常显示名称了
+		Local $uboundValue = UBound($asItem)
+		If $uboundValue = 3 Or $uboundValue = 5 Then
+    		$asItemName = $asItem[2]
+		ElseIf $uboundValue = 4 Then
+    		$asItemName = $asItem[3]
+		EndIf
+
         local $asItemType = $asItem[1]
         local $asItemStats = ""
         local $iItemColor = $bNotEquipment ? $ePrintOrange : $g_iQualityColor[$iQuality]
