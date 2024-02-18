@@ -1085,12 +1085,55 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 		local $bIsMatchByStats = False
 
 		local $asItem = GetItemName($pCurrentUnit)
+
+		;~ 查看数组$asItem的所有元素
+		;~ Local $hFile = FileOpen("test.txt", 1) ; 打开文件，使用1表示追加模式，如果文件不存在则创建
+		;~ If $hFile = -1 Then
+    	;~ 	MsgBox(0, "Error", "Unable to open file.")
+    	;~ 	Exit
+		;~ EndIf
+		;~ For $i = 0 To UBound($asItem) - 1
+    	;~ 	FileWriteLine($hFile, $asItem[$i]) ; 逐行写入数组元素到文件
+		;~ Next
+		;~ FileClose($hFile) ; 关闭文件	
+
 		#cs 
 			$asItem的格式为：
+
+			1
+			ÿc4遗物 Relic
 
 			2
  			(Sacred)
 			拜弗洛斯之皮 Bilefroth Skin
+
+			2
+			ÿc8神秘球体 Mystic Orb
+			恶魔核心 The Demon Core
+
+			2
+			ÿc0强化符文 Enchanted Rune (04)
+			ÿc;符文：尼夫 Nif
+
+			3
+			ÿc8神秘球体 Mystic Orb
+			ÿc;击回专用球
+			ÿc8法恩汉丢失的弹珠 Farnham's Lost Marble
+
+			3
+			ÿc0强化符文 Enchanted Rune (18)
+			ÿc9力量系常用堆力量，也可做召唤毕业手套
+			ÿc;符文：卡 Ka
+
+			3
+			戒指 Ring
+			裂星 (TU) Ripstar
+			ÿc;物理系通用戒
+
+			3
+ 			(Sacred)
+			钢铁面纱 (SSU) Veil of Steel
+			ÿc;物理系可以用一下
 
 			4
 			戒指 Ring
@@ -1104,26 +1147,6 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 			ÿc7(20%法伤/170%ED)
 			ÿc;法系毕业手，俗称大德手
 
-			1
-			ÿc4遗物 Relic
-
-			2
-			ÿc8神秘球体 Mystic Orb
-			恶魔核心 The Demon Core
-
-			3
-			ÿc8神秘球体 Mystic Orb
-			ÿc;击回专用球
-			ÿc8法恩汉丢失的弹珠 Farnham's Lost Marble
-
-			3
-			ÿc0强化符文 Enchanted Rune (18)
-			ÿc9力量系常用堆力量，也可做召唤毕业手套
-			ÿc;符文：卡 Ka
-
-			2
-			ÿc0强化符文 Enchanted Rune (04)
-			ÿc;符文：尼夫 Nif
 		#ce		
 		;~ local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
 		;~ local $asItemName = UBound($asItem) >= 3 ? $asItem[2] : ""      ; 暂时解决吐槽装备name不显示问题
@@ -1132,7 +1155,11 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 		If $uboundValue = 3 Or $uboundValue = 5 Then
     		$asItemName = $asItem[2]
 		ElseIf $uboundValue = 4 Then
-    		$asItemName = $asItem[3]
+    		If StringInStr($asItem[2], "ÿc") Then
+    			$asItemName = $asItem[3]
+			Else
+    			$asItemName = $asItem[2]
+			EndIf
 		EndIf
 
         local $asItemType = $asItem[1]
