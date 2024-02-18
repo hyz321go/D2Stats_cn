@@ -1,8 +1,8 @@
 # D2Stats
 
-Reads Diablo II stats from the game.
-
-[Forum post with a description of the latest version.](https://forum.median-xl.com/viewtopic.php?f=4&t=83520)
+针对D2Stats4.0.0版本之后，魔电客户端打了吐槽补丁，部分装备名称提示BUG的修正版本
+By 魔电西兰花  邮箱 2603568866@qq.com
+原作者 ： Kyromyr， Zahariel1942
 
 
 ![D2Stats window screenshot](Assets/screenshot1.png "D2Stats window screenshot")
