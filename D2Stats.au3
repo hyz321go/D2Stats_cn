@@ -1085,7 +1085,48 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 		local $bIsMatchByStats = False
 
 		local $asItem = GetItemName($pCurrentUnit)
-		local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
+		#cs 
+			$asItem的格式为：
+
+			2
+ 			(Sacred)
+			拜弗洛斯之皮 Bilefroth Skin
+
+			4
+			戒指 Ring
+			巨人指套 (SSU) Giant's Knuckle
+			ÿc7(10%生命偷取)
+			ÿc;物理系毕业戒
+
+			4
+ 			(Sacred)
+			众德鲁伊之手 (SSU) Lamha Na Draoithe
+			ÿc7(20%法伤/170%ED)
+			ÿc;法系毕业手，俗称大德手
+
+			1
+			ÿc4遗物 Relic
+
+			2
+			ÿc8神秘球体 Mystic Orb
+			恶魔核心 The Demon Core
+
+			3
+			ÿc8神秘球体 Mystic Orb
+			ÿc;击回专用球
+			ÿc8法恩汉丢失的弹珠 Farnham's Lost Marble
+
+			3
+			ÿc0强化符文 Enchanted Rune (18)
+			ÿc9力量系常用堆力量，也可做召唤毕业手套
+			ÿc;符文：卡 Ka
+
+			2
+			ÿc0强化符文 Enchanted Rune (04)
+			ÿc;符文：尼夫 Nif
+		#ce		
+		;~ local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
+		local $asItemName = UBound($asItem) >= 3 ? $asItem[2] : ""      ; 暂时解决吐槽装备name不显示问题
         local $asItemType = $asItem[1]
         local $asItemStats = ""
         local $iItemColor = $bNotEquipment ? $ePrintOrange : $g_iQualityColor[$iQuality]

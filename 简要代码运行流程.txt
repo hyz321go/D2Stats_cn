@@ -1,0 +1,30 @@
+Main()————
+_HotKey_Disable($HK_FLAG_D2STATS)
+循环
+{
+UpdateHandle()
+UpdateGUIOptions()
+在游戏内：
+	InjectFunctions()
+	FixShowItemsOnEsc()
+	NotifierMain()
+}
+
+NotifierMain()————
+NotifierCache()
+NotifierCompile()
+当item掉落时
+	DisplayItemOnGround()
+	for循环和通知规则匹配,存入$aOnGroundItem中，再加入$aOnGroundDisplayPool，交由ProcessItems()函数处理
+	ProcessItems($aOnGroundDisplayPool)
+
+
+ProcessItems()—————
+OnGroundFilterItems()
+FormatNotifications()
+DisplayNotification()
+	
+
+DisplayNotification()————
+NarrowNotificationsPool($asNotificationsPool)
+PrintString()
