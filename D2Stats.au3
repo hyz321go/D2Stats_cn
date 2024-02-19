@@ -1147,12 +1147,19 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 			ÿc7(20%法伤/170%ED)
 			ÿc;法系毕业手，俗称大德手
 
+			5
+			 (Sacred)
+			树人之王 (SSU) The King of Ents
+			ÿc7(200%ED/200最大伤害/15撕裂/100杀回)
+			ÿc9我！是！格鲁特！
+			ÿc;树人斧，物理系蛮子必备
+
 		#ce		
 		;~ local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
 		;~ local $asItemName = UBound($asItem) >= 3 ? $asItem[2] : ""      ; 暂时解决吐槽装备name不显示问题
 		Local $asItemName = ""      ; 现在被“吐槽”的暗金球和强化符文也可以正常显示名称了
 		Local $uboundValue = UBound($asItem)
-		If $uboundValue = 3 Or $uboundValue = 5 Then
+		If $uboundValue = 3 Or $uboundValue = 5 Or $uboundValue = 6 Then
     		$asItemName = $asItem[2]
 		ElseIf $uboundValue = 4 Then
     		If StringInStr($asItem[2], "ÿc") Then
