@@ -1,0 +1,44 @@
+Main()————
+循环
+{
+UpdateHandle()
+UpdateGUIOptions()
+在游戏内：
+	InjectFunctions()
+	FixShowItemsOnEsc()
+	NotifierMain()
+}
+
+NotifierMain()————
+NotifierCache()            ; 把游戏内所有物品资料缓存备用
+NotifierCompile()        ; 编译通知文本框内的文字
+当item掉落时
+	DisplayItemOnGround()
+	for循环和通知规则匹配,存入$aOnGroundItem中，再加入$aOnGroundDisplayPool，交由ProcessItems()函数处理
+	ProcessItems($aOnGroundDisplayPool)
+
+
+ProcessItems()—————
+OnGroundFilterItems()    ; 遍历aOnGroundDisplayPool，预处理一些显示隐藏{}过滤等操作，返回asPreNotificationsPool交给FormatNotifications()函数进一步处理
+FormatNotifications()
+DisplayNotification()
+	
+
+DisplayNotification()————
+NarrowNotificationsPool($asNotificationsPool)
+PrintString()
+
+
+
+
+这句代码可以方便的查看数组的内容
+MsgBox(0, "Array Contents", _ArrayToString($aiOffsets, ", "))
+
+变量命名规则猜想：
+g 开头，全局变量
+as 字符串数组
+ai 整形数组
+p 指针
+i 整数
+v 值
+t 结构体
